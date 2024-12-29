@@ -16,7 +16,7 @@ from app.modules.email_utility import (
 
 auth = Blueprint("auth", __name__)
 
-
+# Login --------------------------------------------
 @auth.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -48,6 +48,7 @@ def login():
             return redirect(url_for("main.profile"))
 
 
+# Register ------------------------------------------
 @auth.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "GET":
@@ -87,6 +88,7 @@ def register():
         return redirect(url_for("auth.login"))
 
 
+# Edit Profile -----------------------------------------------
 @auth.post("/edit-profile")
 @login_required
 def edit_profile():
@@ -112,7 +114,7 @@ def edit_profile():
         return redirect(url_for("main.profile"))
 
 
-# Confirm email
+# Confirm email -----------------------------------
 @auth.route("/confirm/<token>")
 def confirm_email(token):
     logout_user()
@@ -131,7 +133,7 @@ def confirm_email(token):
         return render_template("thanks/verify-email.html", success=False)
 
 
-# Send verification email
+# Send verification email --------------------------------
 @auth.get("/send-verification-email")
 @login_required
 def verification_email():
@@ -145,7 +147,7 @@ def verification_email():
         return jsonify({"success": False}), 500
 
 
-# Change password
+# Change password -------------------------------------
 @auth.route("/change-password/<token>")
 def change_password(token):
     email = confirm_token(token)
@@ -160,7 +162,7 @@ def change_password(token):
         )
 
 
-# Forgot password
+# Forgot password -----------------------------------------
 @auth.post("/forgot-password")
 def forgot_password():
     email = request.form.get("email")
@@ -185,6 +187,7 @@ def forgot_password():
     return render_template("auth/auth.html")
 
 
+# Confirm new password ------------------------------------
 @auth.post("/confirm-new-password")
 @csrf.exempt
 def confirm_new_password():
@@ -205,6 +208,7 @@ def confirm_new_password():
         return render_template("thanks/password_change.html", success=False)
 
 
+# Logout ----------------------------------
 @auth.route("/logout")
 def logout():
     logout_user()
