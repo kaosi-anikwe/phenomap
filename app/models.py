@@ -61,10 +61,11 @@ class User(db.Model, TimestampMixin, UserMixin, DatabaseHelperMixin):
     cases = db.relationship("Case", backref="user")
     patient_images = db.relationship("PatientImage", backref="case")
 
-    def __init__(self, firstname, lastname, email, password=None) -> None:
+    def __init__(self, firstname, lastname, email, organization, password=None) -> None:
         self.firstname = firstname
         self.lastname = lastname
         self.email = email
+        self.organization = organization
         self.password_hash = self.get_password_hash(str(password)) if password else None
         self.uid = uuid.uuid4().hex
 
