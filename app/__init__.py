@@ -11,9 +11,11 @@ from flask_migrate import Migrate
 load_dotenv()
 
 log_dir = os.getenv("LOG_DIR")
+upload_dir = os.getenv("UPLOADS")
 
 # create folder if not exists
 os.makedirs(log_dir, exist_ok=True)
+os.makedirs(upload_dir, exist_ok=True)
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -42,12 +44,14 @@ def create_app(config=Config):
     from app.main.routes import main
     from app.auth.routes import auth
     from app.api.routes import api
-
+    from app.images.routes import images
 
     app.register_blueprint(main)
     app.register_blueprint(auth)
-    app.register_blueprint(api)
+    app.register_blueprint(api, url_prefix="/api")
+    app.register_blueprint(images, url_prefix="/api/images")
 
     csrf.exempt(api)
+    csrf.exempt(images)
 
     return app
