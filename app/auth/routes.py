@@ -3,7 +3,7 @@ import traceback
 
 # installed imports
 from flask_login import login_user, current_user, logout_user, login_required
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, get_flashed_messages
 
 # local imports
 from app import db, csrf, logger
@@ -21,11 +21,9 @@ auth = Blueprint("auth", __name__)
 def login():
     if request.method == "GET":
         if current_user.is_authenticated:
-            return redirect(url_for("main.profile"))
+            return redirect(url_for("main.index"))
         return render_template(
-            "auth/auth.html",
-            title="Login",
-            login=True,
+            "auth/login.html",
             next=request.args.get("next") or None,
         )
     else:
@@ -35,7 +33,10 @@ def login():
         user = User.query.filter(User.email == email).first()
         if not user or not user.check_password(password):
             flash("Invalid username or password.", "danger")
-            return redirect(url_for("auth.login"))
+            return render_template(
+                "auth/login.html",
+                next=request.args.get("next") or None,
+            )
 
         login_user(user)
         next_page = request.args.get("next")
@@ -45,7 +46,7 @@ def login():
             return redirect(next_page)
         else:
             flash(text, "success")
-            return redirect(url_for("main.profile"))
+            return redirect(url_for("main.index"))
 
 
 # Register ------------------------------------------
@@ -53,8 +54,8 @@ def login():
 def register():
     if request.method == "GET":
         if current_user.is_authenticated:
-            return redirect(url_for("main.profile"))
-        return render_template("auth/auth.html", title="Register")
+            return redirect(url_for("main.index"))
+        return render_template("auth/register.html", title="Register")
     else:
         firstname = request.form.get("firstname").strip()
         lastname = request.form.get("lastname").strip()
@@ -68,7 +69,7 @@ def register():
                 "An account already exists with this email. Please use a different email to sign up",
                 "danger",
             )
-            return redirect(url_for("auth.register"))
+            return render_template("auth/register.html", title="Register")
 
         # create user class instance / database record
         new_user = User(
@@ -92,26 +93,24 @@ def register():
 @auth.post("/edit-profile")
 @login_required
 def edit_profile():
-    firstname = request.form.get("first_name").strip()
-    lastname = request.form.get("last_name").strip()
-    email = request.form.get("email").strip()
+    firstname = request.form.get("firstname").strip()
+    lastname = request.form.get("lastname").strip()
     organization = request.form.get("organization").strip()
 
     try:
         current_user.firstname = firstname
         current_user.lastname = lastname
-        current_user.email = email
         current_user.organization = organization
         current_user.update()
 
         flash("Profile updated successfully!", "success")
-        return redirect(url_for("main.profile"))
+        return redirect(url_for("main.index"))
     except:
         logger.error(traceback.format_exc())
         db.session.rollback()
 
         flash("Failed to update profile. Please try again later.", "danger")
-        return redirect(url_for("main.profile"))
+        return redirect(url_for("main.index"))
 
 
 # Confirm email -----------------------------------
@@ -158,13 +157,17 @@ def change_password(token):
         )
     else:
         return render_template(
-            "thanks/password_change.html", success=False, title="Change password"
+            "thanks/password-change.html", success=False, title="Change password"
         )
 
 
 # Forgot password -----------------------------------------
-@auth.post("/forgot-password")
+@auth.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
+    if request.method == "GET":
+        if current_user.is_authenticated:
+            return redirect(url_for("main.index"))
+        return render_template("auth/recover.html", title="Account Recovery")
     email = request.form.get("email")
     user = User.query.filter(User.email == email).one_or_none()
     if user:
@@ -172,11 +175,11 @@ def forgot_password():
             send = send_forgot_password_email(user)
             if send:
                 flash("Follow the link we sent to reset your password.", "success")
-                return render_template("auth/auth.html")
+                return render_template("auth/login.html")
             flash(
                 "There was an error sending the email please try again later.", "danger"
             )
-            return render_template("auth/auth.html")
+            return render_template("auth/login.html")
         except:
             flash(
                 "There was an error sending the email, please try again later.",
@@ -184,7 +187,7 @@ def forgot_password():
             )
             return render_template("auth/auth.html")
     flash("Your account was not found. Please proceed to create an account.", "danger")
-    return render_template("auth/auth.html")
+    return render_template("auth/login.html")
 
 
 # Confirm new password ------------------------------------
@@ -200,16 +203,17 @@ def confirm_new_password():
             user.password_hash = user.get_password_hash(password)
             user.update()
 
-            return render_template("thanks/password_change.html", success=True)
+            return render_template("thanks/password-change.html", success=True)
         else:
-            return render_template("thanks/password_change.html", success=False)
+            return render_template("thanks/password-change.html", success=False)
     except:
         logger.error(traceback.format_exc())
-        return render_template("thanks/password_change.html", success=False)
+        return render_template("thanks/password-change.html", success=False)
 
 
 # Logout ----------------------------------
 @auth.route("/logout")
+@login_required
 def logout():
     logout_user()
     return redirect(url_for("main.index"))

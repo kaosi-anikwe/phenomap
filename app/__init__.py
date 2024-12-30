@@ -45,9 +45,11 @@ def create_app(config=Config):
     from app.auth.routes import auth
     from app.api.routes import api
     from app.images.routes import images
+    from app.errors.handlers import errors
 
     app.register_blueprint(main)
     app.register_blueprint(auth)
+    app.register_blueprint(errors)
     app.register_blueprint(api, url_prefix="/api")
     app.register_blueprint(images, url_prefix="/api/images")
 

@@ -1,5 +1,5 @@
 # installed imports
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, redirect, url_for
 from flask_login import login_required, current_user
 
 # local imports
@@ -10,8 +10,10 @@ main = Blueprint("main", __name__)
 
 # Index ---------------------------
 @main.get("/")
+@login_required
 def index():
-    return render_template("main/index.html")
+    cases = Case.query.filter(Case.user_id == current_user.id).all()
+    return render_template("main/index.html", cases=cases)
 
 
 # User Account -------------------------------
@@ -27,18 +29,16 @@ def terms_of_service():
     return render_template("main/tos.html", title="Terms of Service")
 
 
+# About ---------------------------------
+@main.get("/about")
+def about():
+    return render_template("main/about.html", title="About")
+
+
 # Privacy Policy ---------------------------------
 @main.get("/privacy-policy")
 def privacy_policy():
     return render_template("main/privacy.html", title="Pricacy Policy")
-
-
-# Dashboard -------------------------------------
-@main.get("/cases")
-@login_required
-def profile():
-    cases = Case.query.filter(Case.user_id == current_user.id).all()
-    return render_template("main/cases.html", cases=cases)
 
 
 # Add Case ------------------------------------

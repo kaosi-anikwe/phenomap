@@ -1,0 +1,67 @@
+{% extends "layout.html" %} {% block content %}
+<div class="row">
+  <div class="col-xl-12 grid-margin stretch-card flex-column">
+    <div class="row">
+      <div class="col-md-6 grid-margin strech-card mx-auto">
+        <div class="card">
+          <div class="card-body d-flex flex-column justify-content-between">
+            <h5 class="mb-2 text-titlecase mb-4">Edit Profile</h5>
+            <form
+              class="pt-3"
+              action="{{ url_for('auth.edit_profile') }}"
+              method="post"
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+              />
+              <div class="form-group">
+                <input
+                  type="text"
+                  class="form-control form-control-lg"
+                  id="firstname"
+                  placeholder="First Name"
+                  name="firstname"
+                  required
+                  value="{{ current_user.firstname }}"
+                />
+              </div>
+              <div class="form-group">
+                <input
+                  type="text"
+                  class="form-control form-control-lg"
+                  id="lastname"
+                  placeholder="Last Name"
+                  name="lastname"
+                  required
+                  value="{{ current_user.lastname }}"
+                />
+              </div>
+              <div class="form-group">
+                <input
+                  type="text"
+                  class="form-control form-control-lg"
+                  id="organization"
+                  placeholder="Affiliation"
+                  name="organization"
+                  value="{{ current_user.organization }}"
+                />
+              </div>
+              <div class="mt-3">
+                <button
+                  class="btn btn-block btn-primary btn-lg font-weight-medium auth-form-btn"
+                  type="submit"
+                >
+                  SUBMIT
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

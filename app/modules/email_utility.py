@@ -34,7 +34,6 @@ def send_email(receiver_email, subject, plaintext, html=None):
 
     # Add HTML/plain-text parts to MIMEMultipart message
     # The email client will try to render the last part first
-    message.attach(part1)
     if html:
         message.attach(part2)
 
@@ -64,7 +63,7 @@ def send_registration_email(user):
     )
     logger.info(f"Generated confirm URL: {confirm_url}")
     subject = "Registration successful - Please verify your email address."
-    plaintext = f"Welcome {user.display_name()}.\nPlease verify your email address by following this link:\n\n{confirm_url}"
+    plaintext = f"Welcome {user.display_name()}. Please follow the link provided to verify your email."
     html = render_template(
         "email/verification_email.html", confirm_url=confirm_url, user=user
     )

@@ -1,0 +1,93 @@
+<body>
+  <!-- ======= Header ======= -->
+  <header
+    id="header"
+    style="
+      transition: all 0.5s;
+      z-index: 997;
+      padding: 2rem;
+      border-bottom: 1px solid #e6f2fb;
+    "
+  >
+    <div
+      style="
+        --bs-gutter-x: 1.5rem;
+        --bs-gutter-y: 0;
+        width: 100%;
+        padding-right: calc(var(--bs-gutter-x) * 0.5);
+        padding-left: calc(var(--bs-gutter-x) * 0.5);
+        margin-right: auto;
+        margin-left: auto;
+        align-items: center;
+        justify-content: space-between;
+        display: flex;
+
+        @media (min-width: 576px) {
+          .container {
+            max-width: 540px;
+          }
+        }
+        @media (min-width: 768px) {
+          .container {
+            max-width: 720px;
+          }
+        }
+        @media (min-width: 992px) {
+          .container {
+            max-width: 960px;
+          }
+        }
+        @media (min-width: 1200px) {
+          .container {
+            max-width: 1140px;
+          }
+        }
+        @media (min-width: 1400px) {
+          .container {
+            max-width: 1320px;
+          }
+        }
+      "
+    >
+      <h1
+        class="logo"
+        style="
+          font-size: 28px;
+          margin: 0;
+          padding: 0;
+          line-height: 1;
+          font-weight: 300;
+          letter-spacing: 0.5px;
+          font-family: 'Poppins', sans-serif;
+        "
+      >
+        <a
+          style="color: #16507b"
+          href="{{ url_for('main.index', _external=True, _scheme='https') }}"
+        >
+          <img
+            src="{{ url_for('static', filename='img/phenofull.png', _external=True, _scheme='https') }}"
+            alt="PhenoMap"
+            style="max-height: 40px"
+          />
+        </a>
+      </h1>
+    </div>
+  </header>
+  <!-- End Header -->
+
+  <div
+    style="
+      --bs-gutter-x: 1.5rem;
+      --bs-gutter-y: 0;
+      display: flex;
+      flex-wrap: wrap;
+      margin-top: calc(-1 * var(--bs-gutter-y));
+      margin-right: 2rem;
+      margin-left: 2rem;
+    "
+    class="row"
+  >
+    {% block email_content %} {% endblock %}
+  </div>
+</body>

@@ -53,11 +53,11 @@ class User(db.Model, TimestampMixin, UserMixin, DatabaseHelperMixin):
     uid = db.Column(db.String(200), unique=True, nullable=False)
     firstname = db.Column(db.String(50), nullable=False)
     lastname = db.Column(db.String(50), nullable=False)
-    email = db.Column(db.String(100), nullable=False)
-    organization = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(100), nullable=False, unique=True)
+    organization = db.Column(db.String(200))
     account_type = db.Column(db.String(20), default="regular")
     email_verified = db.Column(db.Boolean, default=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(2000), nullable=False)
     cases = db.relationship("Case", backref="user")
     patient_images = db.relationship("PatientImage", backref="case")
 
@@ -112,7 +112,7 @@ class Case(db.Model, TimestampMixin, DatabaseHelperMixin):
     name = db.Column(db.String(200), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     predictions = db.relationship("Prediction", backref="case")
-    patient_images = db.relationship("PatientImage", backref="case")
+    patient_images = db.relationship("PatientImage", backref="image_case")
 
     def __init__(self, name, user_id):
         self.uid = uuid.uuid4().hex
