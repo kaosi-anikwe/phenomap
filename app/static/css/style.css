@@ -3532,14 +3532,15 @@ dl li {
   white-space: nowrap;
 }
 
-.table td {
+/* .table td {
   font-size: 0.875rem;
-}
+} */
 
 .table td img {
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   border-radius: 100%;
+  object-fit: cover;
 }
 
 .table td .badge {
@@ -5425,4 +5426,98 @@ dl li {
 }
 .text-primary:hover {
   color: #01e2ff !important;
+}
+
+.border-primary {
+  outline: 1px solid #01e2ff;
+}
+
+/* Custom DataTables styling */
+.dataTables_wrapper {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Search input styling */
+.dataTables_filter input {
+  border: 1px solid var(--bs-gray-300);
+  border-radius: 4px;
+  padding: 6px 12px;
+}
+
+/* Pagination button styling */
+.page-item.active .page-link {
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+}
+
+.page-link {
+  color: var(--bs-primary);
+}
+
+/* Hover effect */
+table.dataTable tbody tr:hover {
+  background-color: var(--bs-gray-100);
+}
+
+/* Processing indicator */
+div.dataTables_processing {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--bs-gray-200);
+  border-radius: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dataTables_wrapper {
+    padding: 10px;
+  }
+
+  .btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+/* Custom DataTables styling for Bootstrap 4 */
+.dataTables_wrapper {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Search input styling */
+.dataTables_filter input {
+  border: 1px solid #dee2e6; /* Bootstrap 4 border color */
+  border-radius: 4px;
+  padding: 6px 12px;
+}
+
+.dt-search {
+  margin-bottom: 1rem;
+}
+
+/* Pagination button styling */
+.page-item.active .page-link {
+  background-color: #007bff; /* Bootstrap 4 primary color */
+  border-color: #007bff;
+}
+
+.page-link {
+  color: #007bff;
+}
+
+/* Table header styling */
+table.dataTable thead th {
+  /* font-weight: 600; */
+  border-bottom: 2px solid #dee2e6; /* Bootstrap 4 gray-300 */
+}
+
+/* Hover effect */
+table.dataTable tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.075); /* Bootstrap 4 hover color */
 }

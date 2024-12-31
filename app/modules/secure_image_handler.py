@@ -13,18 +13,23 @@ from PIL import Image
 from werkzeug.utils import secure_filename
 
 # local imports
+from .. import logger
 from ..models import PatientImage, Case
 
 
 class SecureImageHandler:
-    def __init__(self, storage_path: str = os.getenv("UPLOADS")):
+    def __init__(
+        self,
+        key: Optional[bytes | str] = None,
+        storage_path: str = os.getenv("UPLOADS"),
+    ):
         """Initialize the secure image handler.
 
         Args:
             storage_path: Base path for storing encrypted images
         """
 
-        self.key = Fernet.generate_key()
+        self.key = Fernet.generate_key() if not key else key
 
         self.cipher_suite = Fernet(self.key)
         self.storage_path = Path(storage_path)
@@ -32,7 +37,7 @@ class SecureImageHandler:
 
         # Configure allowed file types
         self.ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
-        self.MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+        self.MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
     def validate_image(self, image_file) -> Tuple[bool, Optional[str]]:
         """Validate image file for type and size.
@@ -80,7 +85,9 @@ class SecureImageHandler:
         """
         return hashlib.sha256(file_data).hexdigest()
 
-    def store_image(self, image_file, case_id: str, user_id: str) -> dict:
+    def store_image(
+        self, image_file, case_id: str, user_id: str, is_default=False
+    ) -> dict:
         """Store image securely with encryption.
 
         Args:
@@ -128,6 +135,7 @@ class SecureImageHandler:
                 filename=filename,
                 content_hash=content_hash,
                 user_id=user_id,
+                is_default=is_default,
             )
 
             return metadata
@@ -160,8 +168,60 @@ class SecureImageHandler:
 
         return io.BytesIO(decrypted_data)
 
+    def delete_image(self, image_id: str, user_id: str) -> bool:
+        """Delete an image and its associated records.
+
+        Args:
+            image_id: ID of image to delete
+            user_id: ID of user requesting deletion
+
+        Returns:
+            bool: True if deletion was successful
+
+        Raises:
+            PermissionError: If user doesn't have permission to delete
+            FileNotFoundError: If image doesn't exist
+        """
+        try:
+            # First verify user has permission to delete this image
+            if not self._verify_access(image_id, user_id):
+                raise PermissionError("Unauthorized access to delete image")
+
+            # Get image details from database
+            result = PatientImage.query.filter_by(
+                id=image_id, is_deleted=False
+            ).one_or_none()
+
+            if not result:
+                raise FileNotFoundError("Image not found or already deleted")
+
+            filename = result.filename
+
+            try:
+                # Soft delete in database
+                result.delete()
+
+                # Delete physical file
+                file_path = self.storage_path / filename
+                if file_path.exists():
+                    logger.info(f"Image found at: {file_path}")
+                    file_path.unlink()
+
+                return True
+
+            except Exception as e:
+                raise Exception(f"Failed to delete image: {str(e)}")
+
+        except Exception as e:
+            raise Exception(f"Error deleting image: {str(e)}")
+
     def _store_image_metadata(
-        self, case_id: str, filename: str, content_hash: str, user_id: str
+        self,
+        case_id: str,
+        filename: str,
+        content_hash: str,
+        user_id: str,
+        is_default=False,
     ) -> dict:
         """Store image metadata in database."""
         try:
@@ -169,10 +229,17 @@ class SecureImageHandler:
                 case_id=case_id,
                 user_id=user_id,
                 filename=filename,
-                encryption_key=self.key[:10],
+                encryption_key=self.key,
                 content_hash=content_hash,
             )
+            patient_image.is_default = is_default
             patient_image.insert()
+            return {
+                "user_id": user_id,
+                "case_id": case_id,
+                "image_id": patient_image.id,
+                "filename": patient_image.filename,
+            }
         except Exception as e:
             raise RuntimeError(f"Database error: {str(e)}")
 

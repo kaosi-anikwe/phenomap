@@ -1,0 +1,25 @@
+{% extends "email_layout.html" %} {% block email_content %}
+<main id="main">
+  <section id="hero" class="d-flex align-items-center">
+    <div class="container">
+      <div class="section-title">
+        <h2>Hey {{ user.display_name() }}!</h2>
+      </div>
+
+      <div class="row content">
+        <div class="col-lg-6 pt-4 pt-lg-0">
+          <p>We don't recognize your new email.</p>
+          <p>Follow the link below to verify it.</p>
+          <a
+            href="{{ confirm_url }}"
+            title="Verify Email"
+            class="btn-learn-more"
+            >Verify Email</a
+          >
+          <p>The link will expire in 1 hour.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}

@@ -175,3 +175,9 @@ migrations/
 
 # helper shell scripts
 scripts/
+
+# user uploads
+uploads/
+
+# logs
+logs/

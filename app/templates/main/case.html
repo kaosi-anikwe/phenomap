@@ -1,0 +1,449 @@
+{% extends "layout.html" %} {% block content %}
+<link
+  rel="stylesheet"
+  type="text/css"
+  href="//cdn.jsdelivr.net/gh/loadingio/ldbutton@latest/dist/index.min.css"
+/>
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/loadingio/loading.css@v2.0.0/dist/loading.min.css"
+/>
+<link
+  rel="stylesheet"
+  href="{{ url_for('static', filename='css/case.css') }}"
+/>
+<div class="row">
+  <div class="col-xl-12 grid-margin stretch-card flex-column">
+    <div class="row">
+      <div class="col-md-10 grid-margin stretch-card mx-auto flex-column">
+        <div class="row justify-content-between">
+          <h4
+            class="mb-2 text-titlecase mb-4 mr-auto ml-3 align-content-center"
+          ></h4>
+        </div>
+        <!-- Case Header Section -->
+        <div class="card mb-4">
+          <!-- Case Title Area -->
+          <div class="card-header bg-light d-flex align-items-center">
+            <h3 class="mb-0 d-flex align-items-center case-title-container">
+              <span
+                id="case-title"
+                class="case-title"
+                data-uid="{{ case.uid }}"
+                data-case-id="{{ case.id }}"
+              >
+                {% if case.name %} {{ case.name }} {% else %} Add Case Name Or
+                ID {% endif %}
+              </span>
+              <input
+                type="text"
+                class="form-control form-control-sm case-title-input d-none"
+                style="font-size: 1.25rem"
+                value="{{ case.name }}"
+                placeholder="Add Case Name Or ID"
+              />
+              <button class="btn btn-link p-0 ml-1 edit-title-btn">
+                <i class="typcn typcn-pencil" style="font-size: 0.8em"></i>
+              </button>
+            </h3>
+            <div class="ml-auto d-flex">
+              <button
+                class="btn btn-sm btn-icon-text btn-danger mr-2"
+                onclick="deleteCase('{{ case.uid }}')"
+              >
+                <i class="typcn typcn-trash"></i>
+              </button>
+              <button class="btn btn-sm btn-icon-text btn-secondary">
+                <i class="typcn typcn-download-outline"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Overview Section -->
+          <div class="card-body">
+            <div class="d-flex align-items-center mb-3">
+              <div class="d-flex flex-column align-items-start">
+                <h5 class="mb-3">Overview</h5>
+                <span class="badge badge-warning">{{ case.status }}</span>
+              </div>
+
+              <button
+                id="caseNotesBtn"
+                class="btn btn-sm btn-info ml-auto mb-4"
+              >
+                Case Notes ({{ case.notes | length }})
+              </button>
+            </div>
+
+            <!-- Case Details Grid -->
+            <div class="row">
+              <div class="col-md-6">
+                <!-- Left Column -->
+                <div class="form-group row mb-2">
+                  <label class="col-sm-4 col-form-label text-muted"
+                    >Created</label
+                  >
+                  <div class="col-sm-8">
+                    <div class="">
+                      <p class="form-control-plaintext mb-0 date-display">
+                        {{ case.format_date()[0] }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row mb-2">
+                  <label class="col-sm-4 col-form-label text-muted"
+                    >Modified</label
+                  >
+                  <div class="col-sm-8">
+                    <div class="">
+                      <p class="form-control-plaintext mb-0 date-display">
+                        {% if case.updated_at %} {{ case.format_date()[1] }} {%
+                        else %} NULL {% endif %}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row mb-2">
+                  <label class="col-sm-4 col-form-label text-muted"
+                    >Birth Date</label
+                  >
+                  <div class="col-sm-8">
+                    <div class="date-field">
+                      <p class="form-control-plaintext mb-0 date-display">
+                        {% if case.dob %} {{ case.date_of_birth() }} {% else %}
+                        NULL {% endif %}
+                      </p>
+                      <input
+                        type="date"
+                        class="form-control form-control-sm date-input d-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <!-- Right Column -->
+                <div class="form-group row mb-2">
+                  <label class="col-sm-4 col-form-label text-muted"
+                    >Gender</label
+                  >
+                  <div class="col-sm-8">
+                    <select id="genderSelect" class="form-control">
+                      <option>Select</option>
+                      {% for option in ["Male", "Female"] %} {% if case.gender
+                      == option %}
+                      <option value="{{ option }}" selected>
+                        {{ option }}
+                      </option>
+                      {% else %}
+                      <option value="{{ option }}">{{ option }}</option>
+                      {% endif %} {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group row mb-2">
+                  <label class="col-sm-4 col-form-label text-muted"
+                    >Ethnicity</label
+                  >
+                  <div class="col-sm-8">
+                    <select id="ethnicitySelect" class="form-control">
+                      <option>Select</option>
+                      {% for option in ["African", "Arab" "Asian", "Caucasian",
+                      "Hispanic", "Latin American", "Native American" "Other"]
+                      %} {% if case.ethnicity == option %}
+                      <option value="{{ option }}" selected>
+                        {{ option }}
+                      </option>
+                      {% else %}
+                      <option value="{{ option }}">{{ option }}</option>
+                      {% endif %} {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-10 grid-margin stretch-card mx-auto flex-column">
+        <div class="row justify-content-between">
+          <h4
+            class="mb-2 text-titlecase mb-4 mr-auto ml-3 align-content-center"
+          ></h4>
+        </div>
+        <!-- Exam Visit Section -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">Exam Visit</h5>
+          </div>
+
+          <!-- Alert Message -->
+          <div
+            class="alert alert-warning alert-dismissible fade show m-3"
+            role="alert"
+          >
+            <div class="d-flex align-items-center">
+              <i class="typcn typcn-info-outline mr-2"></i>
+              <span>Max image upload size per image is 5MB</span>
+            </div>
+            <button
+              type="button"
+              class="close"
+              data-dismiss="alert"
+              aria-label="Close"
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+
+          <div class="card-body">
+            <div class="row">
+              <!-- Left Column - Image Upload -->
+              <div class="col-md-6 mb-4 mb-md-0">
+                <div class="upload-area text-center p-4 border rounded">
+                  <!-- Main thumbnail overlay -->
+                  <div class="main-thumbnail-overlay ld-over d-none">
+                    <div
+                      class="ld ld-ring ld-cycle"
+                      style="font-size: 5rem"
+                    ></div>
+                    <img src="" alt="Main photo" class="main-thumbnail" />
+                    <div class="overlay-controls">
+                      <span class="photo-count">Photos & Files (1)</span>
+                      <button class="btn btn-sm btn-light view-all-btn">
+                        <i class="typcn typcn-arrow-maximise"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Upload interface (hidden when thumbnail is shown) -->
+                  <div class="upload-interface">
+                    <div class="image-upload-icon mb-3">
+                      <i
+                        class="typcn typcn-user text-primary"
+                        style="font-size: 48px"
+                      ></i>
+                    </div>
+                    <div class="d-flex flex-column align-items-center">
+                      <p class="mb-2 text-muted">
+                        ADD MULTIPLE PHOTOS AND FILES
+                      </p>
+                      <p class="small text-muted">
+                        DRAG AND DROP HERE OR CLICK TO BROWSE
+                      </p>
+                      <input
+                        type="file"
+                        id="examPhotos"
+                        class="d-none"
+                        multiple
+                        accept="image/*"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column - Measurements -->
+              <div class="col-md-6">
+                <div class="measurements-container">
+                  <div class="form-group row">
+                    <label class="col-sm-4 col-form-label">Height</label>
+                    <div class="col-sm-5">
+                      <input
+                        type="number"
+                        class="form-control form-control-sm text-right measurement"
+                        data-fieldName="height"
+                        value="{{ case.height }}"
+                      />
+                    </div>
+                    <div class="col-sm-3">
+                      <span class="form-control-plaintext small">cm</span>
+                    </div>
+                  </div>
+
+                  <div class="form-group row">
+                    <label class="col-sm-4 col-form-label">Weight</label>
+                    <div class="col-sm-5">
+                      <input
+                        type="number"
+                        class="form-control form-control-sm text-right measurement"
+                        data-fieldName="weight"
+                        value="{{ case.weight }}"
+                      />
+                    </div>
+                    <div class="col-sm-3">
+                      <span class="form-control-plaintext small">kg</span>
+                    </div>
+                  </div>
+
+                  <div class="form-group row">
+                    <label class="col-sm-4 col-form-label"
+                      >Head Circumference</label
+                    >
+                    <div class="col-sm-5">
+                      <input
+                        type="number"
+                        class="form-control form-control-sm text-right measurement"
+                        data-fieldName="head_circ"
+                        value="{{ case.head_circ }}"
+                      />
+                    </div>
+                    <div class="col-sm-3">
+                      <span class="form-control-plaintext small">cm</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Photos Modal -->
+<div class="modal fade" id="photosModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Photos & Files</h5>
+        <button type="button" class="close" data-dismiss="modal">
+          <span>&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="photos-grid">
+          <!-- Photos will be inserted here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="addMorePhotos">
+          <i class="typcn typcn-plus"></i> Add
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Photo Details Modal -->
+<div class="modal fade" id="photoDetailsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Photo Details</h5>
+        <button type="button" class="close" data-dismiss="modal">
+          <span>&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-4">
+            <div class="form-group">
+              <label class="col-sm-4 col-form-label text-muted">Type</label>
+              <div class="com-sm-8">
+                <select class="form-control image-detail" data-fieldName="type">
+                  <option>Select</option>
+                  <option value="Frontal">Frontal</option>
+                  <option value="Left Profile">Left Profile</option>
+                  <option value="Right Profile">Right Profile</option>
+                  <option value="Parent">Parent</option>
+                  <option value="Sibling">Sibling</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-sm-4 col-form-label text-muted"
+                >Description</label
+              >
+              <textarea
+                class="form-control form-control-sm image-detail"
+                rows="3"
+                data-fieldName="description"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label class="col-form-label text-muted">Date Taken</label>
+              <input
+                type="date"
+                class="form-control form-control-sm image-detail"
+                data-fieldName="date_taken"
+              />
+            </div>
+            <div class="status-indicators">
+              <div class="indicator">
+                <i class="typcn typcn-input-checked text-muted"></i> Photo
+                Analyzed
+              </div>
+              <div class="indicator">
+                <i class="typcn typcn-input-checked text-muted"></i> Default
+                Photo
+              </div>
+            </div>
+          </div>
+          <div class="col-md-8">
+            <img src="" alt="Photo detail" class="img-fluid" />
+            <div class="photo-actions mt-2">
+              <button class="btn btn-sm btn-light" title="Zoom in">
+                <i class="typcn typcn-zoom-in"></i>
+              </button>
+              <button class="btn btn-sm btn-light" title="Set as Default">
+                <i class="typcn typcn-refresh"></i>
+              </button>
+              <button class="btn btn-sm btn-light" title="Delete Image">
+                <i class="typcn typcn-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Notes Modal -->
+<div class="modal fade" id="notesModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title">Case Notes</h5>
+        <button type="button" class="close" data-dismiss="modal">
+          <span>&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- Notes List -->
+        <div class="notes-container mb-4">
+          <!-- Notes will be inserted here -->
+        </div>
+
+        <!-- New Note Input -->
+        <div class="new-note-container d-flex">
+          <div class="user-avatar mr-3">
+            <i
+              class="typcn typcn-user text-primary border-primary rounded-circle d-flex"
+              style="font-size: 32px; width: 2rem; height: 2rem"
+            ></i>
+          </div>
+          <div class="flex-grow-1">
+            <textarea
+              class="form-control"
+              id="newNoteText"
+              rows="2"
+              placeholder="Add a note..."
+            ></textarea>
+            <div class="text-right mt-2">
+              <button class="btn btn-secondary" id="postNoteBtn">
+                Post New Note
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/case.js') }}"></script>
+{% endblock %}

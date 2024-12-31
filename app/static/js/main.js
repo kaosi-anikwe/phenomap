@@ -29,3 +29,59 @@ const flashMessage = (message, catetgory = "info", delay = 5000) => {
   newToast = new bootstrap.Toast(newToast, { delay: delay });
   newToast.show();
 };
+
+// Resend verification email
+if (document.getElementById("resend-email")) {
+  document
+    .getElementById("resend-email")
+    .addEventListener("click", async () => {
+      try {
+        let response = await fetch("/send-verification-email");
+        if (response.ok) {
+          flashMessage("Verification email sent successfully!", "success");
+          return;
+        }
+        flashMessage(
+          "Verification email failed to send. Please try again later.",
+          "danger"
+        );
+      } catch (error) {
+        console.error(error);
+        flashMessage(
+          "Verification email failed to send. Please try again later.",
+          "danger"
+        );
+      }
+    });
+}
+
+// Add Case
+const addCase = async (verified = false) => {
+  try {
+    if (!verified) {
+      flashMessage("Please verify your email before adding a case.");
+      return;
+    }
+    let response = await fetch("/api/cases/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: "" }),
+    });
+    if (response.ok) {
+      let data = await response.json();
+      window.location.href = `/case/${data.uid}`;
+    } else {
+      console.log(await response.text());
+      flashMessage(
+        "There was an error. Refresh the page and try again.",
+        "danger"
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    flashMessage(
+      "Something went wrong. Please refresh the page and try again.",
+      "danger"
+    );
+  }
+};

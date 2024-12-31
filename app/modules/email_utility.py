@@ -2,6 +2,7 @@
 import os
 import ssl
 import smtplib
+from datetime import datetime, timedelta
 from email.header import Header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -62,11 +63,21 @@ def send_registration_email(user):
         "auth.confirm_email", token=token, _external=True, _scheme="https"
     )
     logger.info(f"Generated confirm URL: {confirm_url}")
-    subject = "Registration successful - Please verify your email address."
-    plaintext = f"Welcome {user.display_name()}. Please follow the link provided to verify your email."
-    html = render_template(
-        "email/verification_email.html", confirm_url=confirm_url, user=user
-    )
+    # check if user already registered
+    if (datetime.utcnow() - user.created_at) > timedelta(
+        minutes=1
+    ):  # user account is over a minute
+        subject = "Confirm changes - Please verify the changes made to your account."
+        plaintext = "Re-verify your email address."
+        html = render_template(
+            "email/verify_changes.html", confirm_url=confirm_url, user=user
+        )
+    else:
+        subject = "Registration successful - Please verify your email address."
+        plaintext = f"Welcome {user.display_name()}. Please follow the link provided to verify your email."
+        html = render_template(
+            "email/verification_email.html", confirm_url=confirm_url, user=user
+        )
     return send_email(user.email, subject, plaintext, html)
 
 

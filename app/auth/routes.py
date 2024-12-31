@@ -3,7 +3,16 @@ import traceback
 
 # installed imports
 from flask_login import login_user, current_user, logout_user, login_required
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, get_flashed_messages
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+    get_flashed_messages,
+)
 
 # local imports
 from app import db, csrf, logger
@@ -83,7 +92,7 @@ def register():
         send_registration_email(new_user)
         login_user(new_user)
         flash(
-            "Your account has been created successfully!",
+            "Your account has been created successfully! Follow the link in your inbox to verify your email.",
             "success",
         )
         return redirect(url_for("auth.login"))
@@ -95,11 +104,14 @@ def register():
 def edit_profile():
     firstname = request.form.get("firstname").strip()
     lastname = request.form.get("lastname").strip()
+    email = request.form.get("email").strip()
     organization = request.form.get("organization").strip()
 
     try:
+        current_user.email_verified = email == current_user.email
         current_user.firstname = firstname
         current_user.lastname = lastname
+        current_user.email = email
         current_user.organization = organization
         current_user.update()
 

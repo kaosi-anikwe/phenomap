@@ -23,11 +23,17 @@ class TimestampMixin(object):
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     def format_date(self):
-        self.created_at = self.created_at.strftime("%d %B, %Y %I:%M")
+        return (
+            self.created_at.strftime("%d %b %Y"),
+            self.updated_at.strftime("%d %b %Y")
+            if self.updated_at
+            else self.created_at.strftime("%d %b %Y"),
+            None,
+        )
 
     def format_time(self):
         try:
-            self.datetime = self.datetime.strftime("%d %B, %Y %I:%M")
+            self.datetime = self.datetime.strftime("%d %b, %Y %I:%M")
         except:
             pass
 
@@ -58,8 +64,10 @@ class User(db.Model, TimestampMixin, UserMixin, DatabaseHelperMixin):
     account_type = db.Column(db.String(20), default="regular")
     email_verified = db.Column(db.Boolean, default=False)
     password_hash = db.Column(db.String(2000), nullable=False)
-    cases = db.relationship("Case", backref="user")
-    patient_images = db.relationship("PatientImage", backref="case")
+    cases = db.relationship("Case", backref="user", cascade="delete,all")
+    patient_images = db.relationship(
+        "PatientImage", backref="case", cascade="delete,all"
+    )
 
     def __init__(self, firstname, lastname, email, organization, password=None) -> None:
         self.firstname = firstname
@@ -109,25 +117,74 @@ class Case(db.Model, TimestampMixin, DatabaseHelperMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     uid = db.Column(db.String(200), unique=True, nullable=False)
-    name = db.Column(db.String(200), nullable=False)
+    name = db.Column(db.String(200), default="")
+    vist_date = db.Column(db.Date)
+    dob = db.Column(db.Date)
+    gender = db.Column(db.String(10))
+    ethnicity = db.Column(db.String(20))
+    status = db.Column(db.String(10), default="Pending")
+    height = db.Column(db.Integer, default=0)
+    weight = db.Column(db.Integer, default=0)
+    head_circ = db.Column(db.Integer, default=0)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
-    predictions = db.relationship("Prediction", backref="case")
-    patient_images = db.relationship("PatientImage", backref="image_case")
+    predictions = db.relationship("Prediction", backref="case", cascade="delete,all")
+    patient_images = db.relationship(
+        "PatientImage", backref="image_case", cascade="delete,all"
+    )
+    notes = db.relationship("CaseNote", backref="note_case", cascade="delete,all")
 
-    def __init__(self, name, user_id):
-        self.uid = uuid.uuid4().hex
-        self.name = name
+    def __init__(self, user_id):
+        self.uid = uuid.uuid4().hex[:5]
         self.user_id = user_id
 
     def __repr__(self):
         return f"<Case: {self.name}>"
+
+    def date_of_birth(self):
+        return self.dob.strftime("%d %b %Y") if self.dob else None
+
+    def parse(self):
+        default_image = PatientImage.query.filter(
+            PatientImage.case_id == self.id, PatientImage.is_default == True
+        ).first()
+        if not default_image and self.patient_images:
+            self.patient_images[0].is_default = True
+            self.patient_images[0].update()
+        return {
+            "id": self.id,
+            "uid": self.uid,
+            "name": self.name if self.name else "Untitled",
+            "image_count": len(self.patient_images),
+            "created": self.format_date()[0],
+            "modified": self.format_date()[1],
+            "status": self.status,
+            "image": PatientImage.query.filter(
+                PatientImage.case_id == self.id, PatientImage.is_default == True
+            )
+            .first()
+            .id
+            if self.patient_images
+            else "",
+        }
+
+
+class CaseNote(db.Model, TimestampMixin, DatabaseHelperMixin):
+    __tablename__ = "case_note"
+
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    case_id = db.Column(db.ForeignKey("case.id"))
+
+    def __init__(self, content, case_id):
+        self.content = content
+        self.case_id = case_id
 
 
 class Prediction(db.Model, TimestampMixin, DatabaseHelperMixin):
     __tablename__ = "prediction"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), nullable=False)
+    name = db.Column(db.String(256), nullable=False)
     case_id = db.Column(db.Integer, db.ForeignKey("case.id"))
 
     def __init__(self, name, case_id):
@@ -142,12 +199,16 @@ class PatientImage(db.Model, TimestampMixin, DatabaseHelperMixin):
     __tablename__ = "patient_image"
 
     id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(50), default="Frontal")
+    date_taken = db.Column(db.Date)
+    description = db.Column(db.String(512))
     case_id = db.Column(db.Integer, db.ForeignKey("case.id"))
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     filename = db.Column(db.String(256), nullable=False)
     encryption_key = db.Column(db.String(256), nullable=False)
     content_hash = db.Column(db.String(256), nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
+    is_default = db.Column(db.Boolean, default=False)
     deletion_date = db.Column(db.DateTime)
 
     def __init__(self, case_id, filename, encryption_key, content_hash, user_id):
