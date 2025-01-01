@@ -146,7 +146,12 @@ class PhotoManager {
 
     const data = await response.json();
     const imageUrl = await this.readFileAsDataURL(file);
-
+    // Dispatch event after successful update
+    document.dispatchEvent(
+      new CustomEvent("caseDataUpdated", {
+        detail: { updated: true },
+      })
+    );
     return {
       id: data.image_id,
       caseId: "",
@@ -196,7 +201,7 @@ class PhotoManager {
     div.innerHTML = `
             <img src="${photo.url}" alt="Case photo">
             <button type="button" class="delete-btn" data-photo-id="${photo.id}">
-                <i class="typcn typcn-times"></i>
+                <i class="mu mu-delete"></i>
             </button>
         `;
 
@@ -252,11 +257,11 @@ class PhotoManager {
     // Update status indicators
     const indicators = modal.querySelectorAll(".indicator i");
     indicators[0].className = photo.isAnalyzed
-      ? "typcn typcn-input-checked text-muted"
-      : "typcn typcn-media-stop-outline text-muted";
+      ? "mu mu-pass text-muted"
+      : "mu mu-radio-off-outline text-muted";
     indicators[1].className = photo.isDefault
-      ? "typcn typcn-input-checked text-success"
-      : "typcn typcn-media-stop-outline text-muted";
+      ? "mu mu-pass text-success"
+      : "mu mu-radio-off-outline text-muted";
 
     // Add event listeners for photo actions
     const actionButtons = modal.querySelectorAll(".photo-actions button");
@@ -393,7 +398,7 @@ class NotesManager {
                 <div class="d-flex">
                     <div class="user-avatar mr-3">
                       <i
-                        class="typcn typcn-user text-primary border-primary rounded-circle d-flex"
+                        class="mu mu-user text-primary border-primary rounded-circle d-flex"
                         style="font-size: 48px; width: 3rem; height: 3rem"
                       ></i>
                     </div>
@@ -421,6 +426,261 @@ class NotesManager {
   }
 }
 
+class CaseAnalysisManager {
+  constructor(caseId) {
+    this.caseId = caseId;
+    this.predictions = [];
+    this.removedPredictions = [];
+    this.visibleCount = 10;
+    this.initializeElements();
+    this.attachEventListeners();
+    this.checkPrerequisites();
+    this.startPrerequisitesMonitoring();
+  }
+
+  initializeElements() {
+    this.section = document.getElementById("caseAnalysis");
+    this.refinePhenotypeBtn = document.getElementById("refinePhenotypeBtn");
+    this.predictionsGrid = document.getElementById("predictionsGrid");
+    this.removedGrid = document.getElementById("removedGrid");
+    this.showMoreBtn = document.getElementById("showMoreBtn");
+    this.predictionCount = document.getElementById("predictionCount");
+    this.removedCount = document.getElementById("removedCount");
+  }
+
+  attachEventListeners() {
+    this.refinePhenotypeBtn.addEventListener("click", () =>
+      this.performClassification()
+    );
+    this.showMoreBtn.addEventListener("click", () =>
+      this.showMorePredictions()
+    );
+  }
+  startPrerequisitesMonitoring() {
+    // Initial check
+    this.checkPrerequisites();
+
+    // Set up monitoring for changes in gender, ethnicity, and images
+    document.addEventListener("caseDataUpdated", (event) => {
+      console.log("Checking prerequisites");
+      this.checkPrerequisites();
+    });
+  }
+
+  async checkPrerequisites() {
+    try {
+      const response = await fetch(`/api/cases/${this.caseId}/prerequisites`);
+      const data = await response.json();
+
+      this.updatePrerequisitesDisplay(data);
+
+      // If prerequisites are met
+      if (data.can_classify) {
+        // Show the section if hidden
+        this.section.classList.remove("d-none");
+
+        // Scroll section into view
+        this.section.scrollIntoView({ behavior: "smooth" });
+
+        // Perform classification if no predictions exist yet
+        if (this.predictions.length === 0) {
+          this.performClassification();
+        }
+      }
+    } catch (error) {
+      console.error("Error checking prerequisites:", error);
+    }
+  }
+
+  updatePrerequisitesDisplay(data) {
+    const { missing_prerequisites } = data;
+    const items = {
+      gender: document.getElementById("prereqGender"),
+      ethnicity: document.getElementById("prereqEthnicity"),
+      images: document.getElementById("prereqImage"),
+    };
+
+    for (const [key, element] of Object.entries(items)) {
+      if (!missing_prerequisites[key]) {
+        element.classList.add("completed");
+        element.querySelector("i").className = "mu mu-pass text-success";
+      } else {
+        element.classList.remove("completed");
+        element.querySelector("i").className =
+          "mu mu-radio-off-outline text-muted";
+      }
+    }
+  }
+
+  async performClassification() {
+    try {
+      const response = await fetch(`/api/cases/${this.caseId}/classify`, {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      this.predictions = data.predictions;
+      this.updatePredictionsDisplay();
+    } catch (error) {
+      console.error("Error performing classification:", error);
+    }
+  }
+
+  updatePredictionsDisplay() {
+    this.predictionsGrid.innerHTML = "";
+    const visiblePredictions = this.predictions.slice(0, this.visibleCount);
+
+    visiblePredictions.forEach((prediction) => {
+      this.predictionsGrid.appendChild(this.createPredictionCard(prediction));
+    });
+
+    this.predictionCount.textContent = this.predictions.length;
+    this.showMoreBtn.classList.toggle(
+      "d-none",
+      this.predictions.length <= this.visibleCount
+    );
+  }
+
+  createPredictionCard(prediction) {
+    const card = document.createElement("div");
+    card.className = "col-md-6 col-lg-4";
+    card.innerHTML = `
+        <div class="prediction-card card mb-3" data-prediction-id="${
+          prediction.id
+        }">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <h6 class="mb-0 text-truncate mr-2">${
+                  prediction.syndrome_name
+                }</h6>
+                <div class="card-actions">
+                    <button class="btn btn-link p-1 mr-1 view-details" title="View details">
+                        <i class="mu mu-expand"></i>
+                    </button>
+                    <button class="btn btn-link text-danger p-1 remove-prediction" title="Remove prediction">
+                        <i class="mu mu-fail"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card-body p-3">
+                <div class="d-flex align-items-start">
+                    <img src="${prediction.composite_image}" 
+                         class="syndrome-image rounded-circle" 
+                         alt="${prediction.syndrome_name}">
+                    
+                    <div class="confidence-meter-container mx-3">
+                        <div class="confidence-level-container">
+                            <div class="confidence-track">
+                                <div class="confidence-level ${
+                                  prediction.status
+                                }" 
+                                     style="height: ${
+                                       prediction.confidence_score * 100
+                                     }%">
+                                </div>
+                            </div>
+                            <div class="confidence-markers">
+                                <div class="marker high"></div>
+                                <div class="marker med"></div>
+                                <div class="marker low"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="diagnosis-status flex-grow-1">
+                        <div class="status-item ${
+                          prediction.diagnosis_status.differential
+                            ? "active"
+                            : ""
+                        }">
+                            <i class="mu mu-pass"></i> Differential
+                        </div>
+                        <div class="divider"></div>
+                        <div class="status-item ${
+                          prediction.diagnosis_status.clinically_diagnosed
+                            ? "active"
+                            : ""
+                        }">
+                            <i class="mu mu-pass"></i> Clinically
+                        </div>
+                        <div class="divider"></div>
+                        <div class="status-item ${
+                          prediction.diagnosis_status.molecularly_diagnosed
+                            ? "active"
+                            : ""
+                        }">
+                            <i class="mu mu-pass"></i> Molecular
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add remove button handler
+    card.querySelector(".remove-prediction").addEventListener("click", () => {
+      this.removePrediction(prediction.id);
+    });
+
+    // Add details button handler (currently does nothing)
+    card.querySelector(".view-details").addEventListener("click", () => {
+      console.log("View details clicked for prediction:", prediction.id);
+    });
+
+    return card;
+  }
+  removePrediction(predictionId) {
+    const prediction = this.predictions.find((p) => p.id === predictionId);
+    if (prediction) {
+      this.predictions = this.predictions.filter((p) => p.id !== predictionId);
+      this.removedPredictions.push(prediction);
+      this.updatePredictionsDisplay();
+      this.updateRemovedPredictionsDisplay();
+    }
+  }
+
+  restorePrediction(predictionId) {
+    const prediction = this.removedPredictions.find(
+      (p) => p.id === predictionId
+    );
+    if (prediction) {
+      this.removedPredictions = this.removedPredictions.filter(
+        (p) => p.id !== predictionId
+      );
+      this.predictions.push(prediction);
+      this.updatePredictionsDisplay();
+      this.updateRemovedPredictionsDisplay();
+    }
+  }
+
+  updateRemovedPredictionsDisplay() {
+    this.removedGrid.innerHTML = "";
+    this.removedCount.textContent = this.removedPredictions.length;
+
+    const removedSection = document.getElementById("removedPredictions");
+    removedSection.classList.toggle(
+      "d-none",
+      this.removedPredictions.length === 0
+    );
+
+    this.removedPredictions.forEach((prediction) => {
+      const card = this.createPredictionCard(prediction);
+      card.querySelector(".remove-prediction").innerHTML =
+        '<i class="mu mu-refresh"></i>';
+      card.querySelector(".remove-prediction").title = "Restore prediction";
+      card.querySelector(".remove-prediction").addEventListener("click", () => {
+        this.restorePrediction(prediction.id);
+      });
+      this.removedGrid.appendChild(card);
+    });
+  }
+
+  showMorePredictions() {
+    this.visibleCount += 10;
+    this.updatePredictionsDisplay();
+  }
+}
+
 // Initialize the photo manager when the document is ready
 document.addEventListener("DOMContentLoaded", () => {
   const photoManager = new PhotoManager();
@@ -429,6 +689,7 @@ document.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("DOMContentLoaded", function () {
   const caseId = document.getElementById("case-title").dataset.caseId;
   const notesManager = new NotesManager(caseId);
+  const analysisManager = new CaseAnalysisManager(caseId);
 
   // Handle Case Notes button click
   document.querySelector("#caseNotesBtn").addEventListener("click", () => {
@@ -447,7 +708,12 @@ const updateCase = async (details = {}) => {
     });
     if (response.ok) {
       let data = await response.json();
-      console.log(data);
+      // Dispatch event after successful update
+      document.dispatchEvent(
+        new CustomEvent("caseDataUpdated", {
+          detail: { updated: true },
+        })
+      );
     } else {
       console.log(await response.text());
       flashMessage(
