@@ -85,3 +85,20 @@ const addCase = async (verified = false) => {
     );
   }
 };
+
+$(document).ready(function () {
+  // Preserve original dropdown functionality
+  $("#profileDropdown").on("click", function (e) {
+    e.preventDefault();
+    $(this).parent().toggleClass("show");
+    $(this).next(".dropdown-menu").toggleClass("show");
+  });
+
+  // Close dropdown when clicking outside
+  $(document).on("click", function (e) {
+    if (!$(e.target).closest(".nav-profile").length) {
+      $(".nav-profile.show").removeClass("show");
+      $(".dropdown-menu.show").removeClass("show");
+    }
+  });
+});

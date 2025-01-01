@@ -1,6 +1,7 @@
 # python imports
 import time
 import uuid
+from enum import Enum
 from datetime import datetime
 
 # installed imports
@@ -16,6 +17,13 @@ from app import db, login_manager
 @login_manager.user_loader
 def load_user(id):
     return User.query.get(int(id))
+
+
+class ClassificationStatus(Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class TimestampMixin(object):
@@ -132,6 +140,9 @@ class Case(db.Model, TimestampMixin, DatabaseHelperMixin):
         "PatientImage", backref="image_case", cascade="delete,all"
     )
     notes = db.relationship("CaseNote", backref="note_case", cascade="delete,all")
+    prediction_requests = db.relationship(
+        "ClassificationRequest", backref="request_case", cascade="delete,all"
+    )
 
     def __init__(self, user_id):
         self.uid = uuid.uuid4().hex[:5]
@@ -142,6 +153,19 @@ class Case(db.Model, TimestampMixin, DatabaseHelperMixin):
 
     def date_of_birth(self):
         return self.dob.strftime("%d %b %Y") if self.dob else None
+
+    def check_classification_prerequisites(self):
+        result = Case.query.filter(Case.id == self.id).one()
+        return {
+            "can_classify": all(
+                [result.gender, result.ethnicity, result.patient_images]
+            ),
+            "missing_prerequisites": {
+                "gender": not result.gender,
+                "ethnicity": not result.ethnicity,
+                "images": not result.patient_images,
+            },
+        }
 
     def parse(self):
         default_image = PatientImage.query.filter(
@@ -184,15 +208,51 @@ class Prediction(db.Model, TimestampMixin, DatabaseHelperMixin):
     __tablename__ = "prediction"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(256), nullable=False)
+    syndrome_name = db.Column(db.String(256), nullable=False)
+    syndrome_code = db.Column(db.String(50), nullable=False)
+    confidence_score = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(10), nullable=False)
+    composite_image = db.Column(db.Text)
+    is_removed = db.Column(db.Boolean, default=False)
     case_id = db.Column(db.Integer, db.ForeignKey("case.id"))
-
-    def __init__(self, name, case_id):
-        self.name = name
-        self.case_id = case_id
+    diagnosis = db.relationship(
+        "CasePredictionDiagnosis", backref="case", cascade="delete", uselist=False
+    )
 
     def __repr__(self):
-        return f"<Prediction: {self.name} - Case {self.case_id}>"
+        return f"<Prediction {self.id} - Case {self.case_id}>"
+
+
+class CasePredictionDiagnosis(db.Model, TimestampMixin, DatabaseHelperMixin):
+    __tablename__ = "prediction_diagnosis"
+
+    id = db.Column(db.Integer, primary_key=True)
+    differential = db.Column(db.Boolean, default=False)
+    clinically_diagnosed = db.Column(db.Boolean, default=False)
+    molecularly_diagnosed = db.Column(db.Boolean, default=False)
+    prediction_id = db.Column(db.ForeignKey("prediction.id"), unique=True)
+
+
+class ClassificationRequest(db.Model, TimestampMixin, DatabaseHelperMixin):
+    __tablename__ = "classification_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.String(10), default=ClassificationStatus.PENDING.value)
+    completed_at = db.Column(db.DateTime)
+    success = db.Column(db.Boolean)
+    error = db.Column(db.Text)
+    prerequisites_met = db.Column(db.Boolean)
+    case_id = db.Column(db.ForeignKey("case.id"))
+
+    def json(self):
+        return {
+            "id": self.id,
+            "case_id": self.case_id,
+            "status": self.status,
+            "error": self.error,
+            "created_at": self.created_at,
+            "completed_at": self.completed_at,
+        }
 
 
 class PatientImage(db.Model, TimestampMixin, DatabaseHelperMixin):

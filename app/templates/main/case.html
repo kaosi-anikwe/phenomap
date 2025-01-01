@@ -14,6 +14,7 @@
 />
 <div class="row">
   <div class="col-xl-12 grid-margin stretch-card flex-column">
+    <!-- Case Overview Section -->
     <div class="row">
       <div class="col-md-10 grid-margin stretch-card mx-auto flex-column">
         <div class="row justify-content-between">
@@ -43,7 +44,7 @@
                 placeholder="Add Case Name Or ID"
               />
               <button class="btn btn-link p-0 ml-1 edit-title-btn">
-                <i class="typcn typcn-pencil" style="font-size: 0.8em"></i>
+                <i class="mu mu-edit" style="font-size: 0.8em"></i>
               </button>
             </h3>
             <div class="ml-auto d-flex">
@@ -51,10 +52,10 @@
                 class="btn btn-sm btn-icon-text btn-danger mr-2"
                 onclick="deleteCase('{{ case.uid }}')"
               >
-                <i class="typcn typcn-trash"></i>
+                <i class="mu mu-delete"></i>
               </button>
               <button class="btn btn-sm btn-icon-text btn-secondary">
-                <i class="typcn typcn-download-outline"></i>
+                <i class="mu mu-download"></i>
               </button>
             </div>
           </div>
@@ -150,8 +151,8 @@
                   <div class="col-sm-8">
                     <select id="ethnicitySelect" class="form-control">
                       <option>Select</option>
-                      {% for option in ["African", "Arab" "Asian", "Caucasian",
-                      "Hispanic", "Latin American", "Native American" "Other"]
+                      {% for option in ["African", "Arab", "Asian", "Caucasian",
+                      "Hispanic", "Latin American", "Native American", "Other"]
                       %} {% if case.ethnicity == option %}
                       <option value="{{ option }}" selected>
                         {{ option }}
@@ -168,6 +169,8 @@
         </div>
       </div>
     </div>
+    <!-- End Case Overview Section -->
+    <!-- Exam Visit Section -->
     <div class="row">
       <div class="col-md-10 grid-margin stretch-card mx-auto flex-column">
         <div class="row justify-content-between">
@@ -187,7 +190,7 @@
             role="alert"
           >
             <div class="d-flex align-items-center">
-              <i class="typcn typcn-info-outline mr-2"></i>
+              <i class="mu mu-info mr-2"></i>
               <span>Max image upload size per image is 5MB</span>
             </div>
             <button
@@ -215,7 +218,7 @@
                     <div class="overlay-controls">
                       <span class="photo-count">Photos & Files (1)</span>
                       <button class="btn btn-sm btn-light view-all-btn">
-                        <i class="typcn typcn-arrow-maximise"></i>
+                        <i class="mu mu-expand"></i>
                       </button>
                     </div>
                   </div>
@@ -224,7 +227,7 @@
                   <div class="upload-interface">
                     <div class="image-upload-icon mb-3">
                       <i
-                        class="typcn typcn-user text-primary"
+                        class="mu mu-user text-primary"
                         style="font-size: 48px"
                       ></i>
                     </div>
@@ -303,6 +306,72 @@
         </div>
       </div>
     </div>
+    <!-- End Exam Visit Seciton -->
+    <!-- Case Analysis Section -->
+    <div id="caseAnalysis" class="row case-analysis-section d-none">
+      <div class="col-md-10 grid-margin stretch-card mx-auto flex-column">
+        <div class="row justify-content-between">
+          <h4
+            class="mb-2 text-titlecase mb-4 mr-auto ml-3 align-content-center"
+          ></h4>
+        </div>
+        <!-- Exam Visit Section -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">Case Analysis</h5>
+          </div>
+
+          <!-- Prerequisites Alert -->
+          <div id="prerequisitesAlert" class="alert alert-warning">
+            <h6 class="alert-heading">Required for Classification:</h6>
+            <ul class="mb-0" id="prerequisitesList">
+              <li id="prereqGender" class="text-muted">
+                <i class="mu mu-pass"></i> Gender
+              </li>
+              <li id="prereqEthnicity" class="text-muted">
+                <i class="mu mu-pass"></i> Ethnicity
+              </li>
+              <li id="prereqImage" class="text-muted">
+                <i class="mu mu-pass"></i> At least one image
+              </li>
+            </ul>
+          </div>
+
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <h5>Suggested Syndromes</h5>
+              <button id="refinePhenotypeBtn" class="btn btn-warning" disabled>
+                Refine Phenotype
+              </button>
+            </div>
+            <!-- Predictions Grid -->
+            <div class="predictions-container mt-4">
+              <h6 class="mb-3">
+                Selected Syndromes (<span id="predictionCount">0</span>)
+              </h6>
+              <div id="predictionsGrid" class="row">
+                <!-- Prediction cards will be inserted here -->
+              </div>
+
+              <div class="text-center mt-4">
+                <button id="showMoreBtn" class="btn btn-outline-primary d-none">
+                  Show More Suggested Syndromes
+                </button>
+              </div>
+            </div>
+
+            <!-- Removed Predictions -->
+            <div id="removedPredictions" class="mt-4 d-none">
+              <h6>Removed Syndromes (<span id="removedCount">0</span>)</h6>
+              <div id="removedGrid" class="row">
+                <!-- Removed prediction cards will be inserted here -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- End Case Analysis Section -->
   </div>
 </div>
 <!-- Photos Modal -->
@@ -322,7 +391,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" id="addMorePhotos">
-          <i class="typcn typcn-plus"></i> Add
+          <i class="mu mu-plus"></i> Add
         </button>
       </div>
     </div>
@@ -375,12 +444,10 @@
             </div>
             <div class="status-indicators">
               <div class="indicator">
-                <i class="typcn typcn-input-checked text-muted"></i> Photo
-                Analyzed
+                <i class="mu mu-pass text-muted"></i> Photo Analyzed
               </div>
               <div class="indicator">
-                <i class="typcn typcn-input-checked text-muted"></i> Default
-                Photo
+                <i class="mu mu-pass text-muted"></i> Default Photo
               </div>
             </div>
           </div>
@@ -388,13 +455,13 @@
             <img src="" alt="Photo detail" class="img-fluid" />
             <div class="photo-actions mt-2">
               <button class="btn btn-sm btn-light" title="Zoom in">
-                <i class="typcn typcn-zoom-in"></i>
+                <i class="mu mu-zoom-in"></i>
               </button>
               <button class="btn btn-sm btn-light" title="Set as Default">
-                <i class="typcn typcn-refresh"></i>
+                <i class="mu mu-refresh"></i>
               </button>
               <button class="btn btn-sm btn-light" title="Delete Image">
-                <i class="typcn typcn-trash"></i>
+                <i class="mu mu-delete"></i>
               </button>
             </div>
           </div>
@@ -423,7 +490,7 @@
         <div class="new-note-container d-flex">
           <div class="user-avatar mr-3">
             <i
-              class="typcn typcn-user text-primary border-primary rounded-circle d-flex"
+              class="mu mu-user text-primary border-primary rounded-circle d-flex"
               style="font-size: 32px; width: 2rem; height: 2rem"
             ></i>
           </div>

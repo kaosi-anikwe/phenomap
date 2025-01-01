@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", function () {
           return `
               <div class="image-upload-icon d-flex">
                 <i
-                  class="typcn typcn-user text-primary border-primary rounded-circle"
+                  class="mu mu-user text-primary border-primary rounded-circle"
                   style="font-size: 48px"
                 ></i>
               </div>

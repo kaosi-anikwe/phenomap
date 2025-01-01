@@ -123,6 +123,12 @@ class PhotoManager {
         this.showAlert("Failed to upload image", "danger");
       }
     }
+    // Dispatch event after successful update
+    document.dispatchEvent(
+      new CustomEvent("caseDataUpdated", {
+        detail: { updated: true },
+      })
+    );
     this.mainThumbnailOverlay.classList.toggle("running");
     this.uploadArea.addEventListener("click", this.handleUploadAreaClick);
   }
@@ -146,12 +152,6 @@ class PhotoManager {
 
     const data = await response.json();
     const imageUrl = await this.readFileAsDataURL(file);
-    // Dispatch event after successful update
-    document.dispatchEvent(
-      new CustomEvent("caseDataUpdated", {
-        detail: { updated: true },
-      })
-    );
     return {
       id: data.image_id,
       caseId: "",
@@ -364,6 +364,7 @@ class NotesManager {
       data.notes.forEach((note) => this.addNoteToDisplay(note));
       this.updateNotesCount(data.notes.length);
     } catch (error) {
+      flashMessage("Error loading notes", "danger");
       console.error("Error loading notes:", error);
     }
   }
@@ -388,6 +389,7 @@ class NotesManager {
       this.noteInput.val("");
       this.updateNotesCount(this.notesCount + 1);
     } catch (error) {
+      flashMessage("Error posting note", "danger");
       console.error("Error posting note:", error);
     }
   }
@@ -434,8 +436,9 @@ class CaseAnalysisManager {
     this.visibleCount = 10;
     this.initializeElements();
     this.attachEventListeners();
-    this.checkPrerequisites();
-    this.startPrerequisitesMonitoring();
+    this.loadExistingPredictions().then(() => {
+      this.startPrerequisitesMonitoring();
+    });
   }
 
   initializeElements() {
@@ -449,13 +452,14 @@ class CaseAnalysisManager {
   }
 
   attachEventListeners() {
-    this.refinePhenotypeBtn.addEventListener("click", () =>
-      this.performClassification()
-    );
+    this.refinePhenotypeBtn.addEventListener("click", () => {
+      this.forceClassification();
+    });
     this.showMoreBtn.addEventListener("click", () =>
       this.showMorePredictions()
     );
   }
+
   startPrerequisitesMonitoring() {
     // Initial check
     this.checkPrerequisites();
@@ -467,28 +471,70 @@ class CaseAnalysisManager {
     });
   }
 
+  async loadExistingPredictions() {
+    try {
+      console.log("Loading Predictions");
+      const response = await fetch(`/api/cases/${this.caseId}/predictions`);
+      if (!response.ok) throw new Error("Failed to fetch predictions");
+
+      const data = await response.json();
+      this.predictions = data.predictions.filter((p) => !p.is_removed);
+      this.removedPredictions = data.predictions.filter((p) => p.is_removed);
+
+      if (this.predictions.length > 0) {
+        this.section.classList.remove("d-none");
+        this.updatePredictionsDisplay();
+        this.updateRemovedPredictionsDisplay();
+      }
+
+      return true;
+    } catch (error) {
+      flashMessage("Error fetching predictions", "danger");
+      console.error("Error loading existing predictions:", error);
+      return false;
+    }
+  }
+
   async checkPrerequisites() {
     try {
       const response = await fetch(`/api/cases/${this.caseId}/prerequisites`);
       const data = await response.json();
 
       this.updatePrerequisitesDisplay(data);
+      this.refinePhenotypeBtn.disabled = !data.can_classify;
 
       // If prerequisites are met
       if (data.can_classify) {
-        // Show the section if hidden
         this.section.classList.remove("d-none");
-
-        // Scroll section into view
         this.section.scrollIntoView({ behavior: "smooth" });
 
-        // Perform classification if no predictions exist yet
+        // Only classify if no predictions exist
         if (this.predictions.length === 0) {
-          this.performClassification();
+          await this.performClassification();
         }
       }
     } catch (error) {
+      flashMessage("Error checking prerequisites");
       console.error("Error checking prerequisites:", error);
+    }
+  }
+
+  async updatePrediction(predictionId, payload) {
+    try {
+      const response = await fetch(
+        `/api/cases/${this.caseId}/predictions/${predictionId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (!response.ok) {
+        console.error("Error updating prediction:", error);
+      }
+    } catch (error) {
+      flashMessage("Error updating prediciton", "danger");
+      console.error("Error updating predction:", error);
     }
   }
 
@@ -512,18 +558,94 @@ class CaseAnalysisManager {
     }
   }
 
-  async performClassification() {
+  async performClassification(force = false) {
     try {
+      if (!force && this.predictions.length > 0) {
+        flashMessage(
+          "Classifications exist. Use forceClassification() to reclassify.",
+          "danger"
+        );
+        return;
+      }
+
       const response = await fetch(`/api/cases/${this.caseId}/classify`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ force: force }),
       });
       const data = await response.json();
 
-      this.predictions = data.predictions;
-      this.updatePredictionsDisplay();
+      if (!response.ok) throw new Error(`Classification failed: ${data.error}`);
+
+      this.pollClassificationStatus(data.request_id);
+
+      // Show success message for forced classification
+      if (force) {
+        flashMessage("Classification request sent successfully", "success");
+      }
     } catch (error) {
       console.error("Error performing classification:", error);
+      flashMessage("Classification failed", "danger");
     }
+  }
+
+  async pollClassificationStatus(requestId, interval = 2000) {
+    const checkStatus = async () => {
+      try {
+        console.log("Checking classification status");
+        const response = await fetch(
+          `/api/cases/${this.caseId}/requests/${requestId}/status`
+        );
+        if (!response.ok) throw new Error("Failed to get status");
+
+        const data = await response.json();
+        console.log(`Classification result is: ${data.status}`);
+
+        if (data.status === "completed") {
+          // Load new predictions
+          await this.loadExistingPredictions();
+          flashMessage("Classification completed", "success");
+          return true;
+        } else if (data.status === "failed") {
+          flashMessage(`Classification failed: ${data.error_message}`, "error");
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        flashMessage("Error checking classification status:", "danger");
+        console.error("Error checking classification status:", error);
+        return true;
+      }
+    };
+    // Show loading state
+    this.setLoadingState(true);
+
+    // Poll until complete or failed
+    while (!(await checkStatus())) {
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+
+    // Hide loading state
+    this.setLoadingState(false);
+  }
+
+  setLoadingState(isLoading) {
+    this.refinePhenotypeBtn.disabled = isLoading;
+    if (isLoading) {
+      this.refinePhenotypeBtn.innerHTML = `
+                <span class="spinner-border spinner-border-sm mr-2"></span>
+                Classifying...
+            `;
+    } else {
+      this.refinePhenotypeBtn.innerHTML = "Refine Phenotype";
+    }
+  }
+
+  forceClassification() {
+    return this.performClassification(true);
   }
 
   updatePredictionsDisplay() {
@@ -634,6 +756,7 @@ class CaseAnalysisManager {
     if (prediction) {
       this.predictions = this.predictions.filter((p) => p.id !== predictionId);
       this.removedPredictions.push(prediction);
+      this.updatePrediction(predictionId, { is_removed: true });
       this.updatePredictionsDisplay();
       this.updateRemovedPredictionsDisplay();
     }
@@ -648,6 +771,7 @@ class CaseAnalysisManager {
         (p) => p.id !== predictionId
       );
       this.predictions.push(prediction);
+      this.updatePrediction(predictionId, { is_removed: false });
       this.updatePredictionsDisplay();
       this.updateRemovedPredictionsDisplay();
     }
