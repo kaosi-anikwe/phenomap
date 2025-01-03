@@ -512,5 +512,152 @@
     </div>
   </div>
 </div>
+<!-- Prediction Details Modal -->
+<div class="modal fade" id="predictionDetailsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title" id="predictionSyndromeName"></h5>
+        <div class="ml-auto">
+          <button class="btn btn-secondary mr-2" data-dismiss="modal">
+            CANCEL
+          </button>
+          <button class="btn btn-primary">APPLY</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Image Comparison Section -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <h6>Image Comparison</h6>
+            <div class="d-flex align-items-center">
+              <div class="case-photo mr-3">
+                <img
+                  src=""
+                  alt="Case Photo"
+                  id="casePhoto"
+                  class="rounded"
+                  style="width: 120px; height: 120px; object-fit: cover"
+                />
+                <small class="d-block text-center mt-1">CASE PHOTO</small>
+              </div>
+              <div class="composite-photo">
+                <img
+                  src=""
+                  alt="Composite Photo"
+                  id="compositePhoto"
+                  class="rounded"
+                  style="width: 120px; height: 120px; object-fit: cover"
+                />
+                <small class="d-block text-center mt-1">COMPOSITE PHOTO</small>
+              </div>
+              <!-- Confidence Level -->
+              <div class="confidence-meter-container ml-4">
+                <div class="confidence-level-container">
+                  <div class="confidence-track">
+                    <div class="confidence-level" id="confidenceLevel"></div>
+                  </div>
+                </div>
+              </div>
+              <!-- Diagnosis Status -->
+              <div class="diagnosis-options ml-4">
+                <div class="diagnosis-item mb-2">
+                  <label class="d-flex align-items-center">
+                    <input
+                      type="checkbox"
+                      class="diagnosis-checkbox mr-2"
+                      data-type="differential"
+                    />
+                    Differential
+                  </label>
+                </div>
+                <div class="diagnosis-item mb-2">
+                  <label class="d-flex align-items-center">
+                    <input
+                      type="checkbox"
+                      class="diagnosis-checkbox mr-2"
+                      data-type="clinically"
+                    />
+                    Clinically Diagnosed
+                  </label>
+                </div>
+                <div class="diagnosis-item">
+                  <label class="d-flex align-items-center">
+                    <input
+                      type="checkbox"
+                      class="diagnosis-checkbox mr-2"
+                      data-type="molecularly"
+                    />
+                    Molecularly Diagnosed
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Syndrome Info Tabs -->
+        <ul class="nav nav-tabs" role="tablist">
+          <li class="nav-item">
+            <a class="nav-link active" data-toggle="tab" href="#syndromeInfo"
+              >Syndrome Info</a
+            >
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#typicalFeatures"
+              >Typical Features</a
+            >
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#relatedGenes"
+              >Related Genes</a
+            >
+          </li>
+        </ul>
+
+        <div class="tab-content mt-3">
+          <!-- Syndrome Info Tab -->
+          <div class="tab-pane fade show active" id="syndromeInfo">
+            <div class="syndrome-description"></div>
+          </div>
+
+          <!-- Typical Features Tab -->
+          <div class="tab-pane fade" id="typicalFeatures">
+            <div class="input-group mb-3">
+              <div class="input-group-prepend">
+                <span class="input-group-text"
+                  ><i class="mu mu-search"></i
+                ></span>
+              </div>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="Filter Features"
+              />
+            </div>
+            <div class="features-list"></div>
+          </div>
+
+          <!-- Related Genes Tab -->
+          <div class="tab-pane fade" id="relatedGenes">
+            <div class="input-group mb-3">
+              <div class="input-group-prepend">
+                <span class="input-group-text"
+                  ><i class="mu mu-search"></i
+                ></span>
+              </div>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="Filter Genes"
+              />
+            </div>
+            <div class="genes-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <script src="{{ url_for('static', filename='js/case.js') }}"></script>
 {% endblock %}

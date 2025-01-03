@@ -1,12 +1,12 @@
 # python imports
 import time
-from typing import Optional, Dict
+import random
 from datetime import datetime
+from typing import Optional, Dict
 
 # installed imports
 import numpy as np
 from PIL import Image
-from flask import Flask
 import tensorflow as tf
 
 # local imports
@@ -14,9 +14,10 @@ from .. import logger, create_app
 from .secure_image_handler import SecureImageHandler
 from ..models import (
     Case,
+    Syndrome,
+    Prediction,
     ClassificationStatus,
     ClassificationRequest,
-    Prediction,
     CasePredictionDiagnosis,
 )
 
@@ -24,7 +25,8 @@ from ..models import (
 class GeneticDisorderClassifier:
     def __init__(self, model_path="path/to/your/model"):
         # Load model
-        self.model = self.load_model(model_path)
+        # self.model = self.load_model(model_path)
+        pass
 
     def load_model(self, model_path):
         """Load the trained model."""
@@ -52,69 +54,76 @@ class GeneticDisorderClassifier:
             logger.error(f"Error preprocessing image: {e}")
             return None
 
-    def classify(self, case: Case):
+    def classify(self, case: Case, fake=True):
         """Perform classification for a case."""
         try:
             logger.info("Classifying image...")
             predictions = []
-            for img in case.patient_images:
-                # Preprocess image
-                handler = SecureImageHandler(img.encryption_key)
-                processed_image = self.preprocess_image(
-                    handler.retrieve_image(img.id, case.user_id)
-                )
+            for idx, img in enumerate(case.patient_images):
+                logger.info(f"Predicting image {idx}")
+                if not fake:
+                    # Preprocess image
+                    handler = SecureImageHandler(img.encryption_key)
+                    processed_image = self.preprocess_image(
+                        handler.retrieve_image(img.id, case.user_id)
+                    )
 
-                if processed_image is None:
-                    continue
+                    if processed_image is None:
+                        continue
 
-                # Get model predictions
-                model_output = self.model.predict(
-                    np.expand_dims(processed_image, axis=0)
-                )
+                    # Get model predictions
+                    model_output = self.model.predict(
+                        np.expand_dims(processed_image, axis=0)
+                    )
+                else:
+                    model_output = generate_mock_predictions()
 
-                # Process model outputs
-                syndrome_predictions = self.process_model_output(
-                    model_output, case["gender"], case["ethnicity"]
-                )
+                predictions.extend(model_output)
 
-                predictions.extend(syndrome_predictions)
+                logger.info(f"Got {len(predictions)} predictions")
 
-            # Aggregate predictions from multiple images if needed
-            logger.info(f"Got {len(predictions)} predictions")
-            final_predictions = self.aggregate_predictions(predictions)
+            logger.info(f"Done predicting {len(case.patient_images)} images")
+            # Process model outputs
+            syndrome_predictions = self.process_model_output(
+                self.remove_duplicates(predictions)
+            )
+            logger.info(f"Total: {len(syndrome_predictions)} predictions")
 
-            return final_predictions
+            return syndrome_predictions
 
         except Exception as e:
             logger.error(f"Classification error: {e}")
             return None
 
-    def process_model_output(self, model_output, gender, ethnicity):
+    def process_model_output(self, model_output):
         """Process raw model output into syndrome predictions."""
         try:
-            # This will depend on your model's output format
-            # Example implementation:
-            syndrome_scores = model_output[
-                0
-            ]  # Assuming output is probabilities per syndrome
             predictions = []
-            for idx, score in enumerate(syndrome_scores):
-                if score > 0.1:  # Minimum confidence threshold
-                    syndrome_info = self.get_syndrome_info(idx)
-                    predictions.append(
-                        {
-                            "syndrome_name": syndrome_info["name"],
-                            "syndrome_code": syndrome_info["code"],
-                            "confidence_score": float(score),
-                            "status": self.get_confidence_status(score),
-                            "composite_image": syndrome_info["composite_image"],
-                            "diagnosis_status": {
-                                "differential": score > 0.7,
-                                "clinically_diagnosed": False,
-                                "molecularly_diagnosed": False,
-                            },
-                        }
-                    )
+            for output in model_output:
+                if output["score"] > 0.1:  # Minimum confidence threshold
+                    syndrome = Syndrome.query.filter(
+                        Syndrome.code == output["code"]
+                    ).first()
+                    if syndrome:
+                        predictions.append(
+                            {
+                                "syndrome_name": syndrome.title,
+                                "syndrome_code": syndrome.code,
+                                "confidence_score": float(output["score"]),
+                                "status": self.get_confidence_status(output["score"]),
+                                "composite_image": syndrome.composite_image
+                                or "img/down.png",
+                                "diagnosis_status": {
+                                    "differential": output["score"] > 0.7,
+                                    "clinically_diagnosed": False,
+                                    "molecularly_diagnosed": False,
+                                },
+                            }
+                        )
+                    else:
+                        logger.info(
+                            f"Skipping missing syndrome prediction with code: {output['code']}"
+                        )
 
             return predictions
         except Exception as e:
@@ -129,32 +138,25 @@ class GeneticDisorderClassifier:
             return "med"
         return "low"
 
-    def aggregate_predictions(self, predictions):
-        """Aggregate predictions from multiple images."""
-        # Group by syndrome and take highest confidence score
-        logger.info("Aggregating predictions")
-        syndrome_dict = {}
-        for pred in predictions:
-            syndrome_code = pred["syndrome_code"]
-            if (
-                syndrome_code not in syndrome_dict
-                or pred["confidence_score"]
-                > syndrome_dict[syndrome_code]["confidence_score"]
-            ):
-                syndrome_dict[syndrome_code] = pred
-
-        # Sort by confidence score
-        final_predictions = list(syndrome_dict.values())
-        final_predictions.sort(key=lambda x: x["confidence_score"], reverse=True)
-
-        return final_predictions
+    def remove_duplicates(self, data):
+        # Create a dictionary to store highest score for each code
+        highest_scores = {}
+        # Iterate through the list
+        for item in data:
+            code = item["code"]
+            score = item["score"]
+            # If code not in dictionary or new score is higher, update it
+            if code not in highest_scores or score > highest_scores[code]["score"]:
+                highest_scores[code] = item
+        # Convert dictionary values back to list
+        return list(highest_scores.values())
 
 
 class ClassificationManager:
     def __init__(self):
         self.active_requests = {}  # Store in-progress requests
         self.request_timeout = 300  # 5 minutes timeout
-        # self.classifier = GeneticDisorderClassifier()
+        self.classifier = GeneticDisorderClassifier()
 
     def create_request(self, case_id: str, force: bool = False) -> dict:
         """Create a new classification request."""
@@ -196,19 +198,12 @@ class ClassificationManager:
 
                 # Get case data
                 case = ClassificationRequest.query.get(request_id).request_case
-
+                # Track time
                 now = datetime.now()
                 logger.info(f"Classification began at: {now}")
-                # TODO: Perform classification
-                # predictions = await self.classifier.classify(case)
-
-                # TODO: Remove simulation
-                time.sleep(10)
-                predictions = generate_mock_predictions()
-                logger.info("Classification end")
-                logger.info(f"Got {len(predictions)} predictions")
+                predictions = self.classifier.classify(case)
                 logger.info(
-                    f"Classification took {(datetime.now() - now).total_seconds()}"
+                    f"Classification end: {(datetime.now() - now).total_seconds()}"
                 )
 
                 # Store predictions
@@ -309,186 +304,12 @@ class ClassificationManager:
 
 
 def generate_mock_predictions():
-    """Generate mock predictions for testing."""
+    """Generate random predictions for testing."""
+    time.sleep(10)
+    syndromes = Syndrome.query.all()
+    random.shuffle(syndromes)
+    syndromes = syndromes[:20]
+    scores = [round(random.uniform(0.0, 0.9), 5) for _ in syndromes]
     return [
-        {
-            "syndrome_name": "Prader-Willi Syndrome",
-            "syndrome_code": "PWS",
-            "confidence_score": 0.92,
-            "status": "high",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": True,
-                "clinically_diagnosed": True,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Down Syndrome",
-            "syndrome_code": "DS",
-            "confidence_score": 0.88,
-            "status": "high",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": True,
-                "clinically_diagnosed": True,
-                "molecularly_diagnosed": True,
-            },
-        },
-        {
-            "syndrome_name": "Cornelia de Lange Syndrome",
-            "syndrome_code": "CdLS",
-            "confidence_score": 0.75,
-            "status": "high",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": True,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Williams Syndrome",
-            "syndrome_code": "WS",
-            "confidence_score": 0.67,
-            "status": "med",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": True,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Noonan Syndrome",
-            "syndrome_code": "NS",
-            "confidence_score": 0.61,
-            "status": "med",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": True,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Fragile X Syndrome",
-            "syndrome_code": "FXS",
-            "confidence_score": 0.58,
-            "status": "med",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": True,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Smith-Magenis Syndrome",
-            "syndrome_code": "SMS",
-            "confidence_score": 0.52,
-            "status": "med",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Angelman Syndrome",
-            "syndrome_code": "AS",
-            "confidence_score": 0.48,
-            "status": "med",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Sotos Syndrome",
-            "syndrome_code": "SoS",
-            "confidence_score": 0.43,
-            "status": "med",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Turner Syndrome",
-            "syndrome_code": "TS",
-            "confidence_score": 0.39,
-            "status": "low",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Rett Syndrome",
-            "syndrome_code": "RTT",
-            "confidence_score": 0.35,
-            "status": "low",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Kabuki Syndrome",
-            "syndrome_code": "KS",
-            "confidence_score": 0.32,
-            "status": "low",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "CHARGE Syndrome",
-            "syndrome_code": "CS",
-            "confidence_score": 0.28,
-            "status": "low",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Treacher Collins Syndrome",
-            "syndrome_code": "TCS",
-            "confidence_score": 0.25,
-            "status": "low",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
-        {
-            "syndrome_name": "Apert Syndrome",
-            "syndrome_code": "AS",
-            "confidence_score": 0.22,
-            "status": "low",
-            "composite_image": "https://phenomap.braintext.io/static/img/down.png",
-            "diagnosis_status": {
-                "differential": False,
-                "clinically_diagnosed": False,
-                "molecularly_diagnosed": False,
-            },
-        },
+        {"code": synd.code, "score": scores[idx]} for idx, synd in enumerate(syndromes)
     ]

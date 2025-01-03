@@ -1,4 +1,5 @@
 # python imports
+import os
 import traceback
 import threading
 from datetime import datetime
@@ -13,11 +14,11 @@ from ..modules.prediction import ClassificationManager
 from ..modules.secure_image_handler import SecureImageHandler
 from ..models import (
     Case,
-    PatientImage,
     CaseNote,
+    Syndrome,
     Prediction,
+    PatientImage,
     CasePredictionDiagnosis,
-    ClassificationRequest,
 )
 
 
@@ -189,6 +190,7 @@ def check_prerequisites(case_id):
         return jsonify({"error": str(e)}), 500
 
 
+# Case Classification -------------------------------------
 @api.route("/<case_id>/classify", methods=["POST"])
 @login_required
 def perform_classification(case_id):
@@ -230,6 +232,7 @@ def perform_classification(case_id):
         return jsonify({"error": str(e)}), 500
 
 
+# Case Prediction ---------------------------------------------
 @api.route("/<case_id>/predictions", methods=["GET"])
 @login_required
 def get_predictions(case_id):
@@ -269,32 +272,51 @@ def get_predictions(case_id):
         return jsonify({"error": str(e)}), 500
 
 
-@api.patch("/<case_id>/predictions/<prediction_id>")
+@api.route("/<case_id>/predictions/<prediction_id>", methods=["GET", "PATCH"])
 @login_required
 def update_prediction(case_id, prediction_id):
     """Update prediction status (remove/restore)."""
     try:
-        is_removed = request.json.get("is_removed", False)
         prediction = Prediction.query.filter_by(
             id=prediction_id, case_id=case_id
         ).one_or_none()
-        if prediction:
+        if not prediction:
+            return jsonify({"error": "Prediction not found"}), 404
+        if request.method == "PATCH":
+            logger.info(f"Updating prediction with data: {request.json}")
+            is_removed = request.json.get("is_removed", False)
             prediction.is_removed = is_removed
             prediction.update()
-        else:
-            return jsonify({"error": "Prediction not found"}), 404
-
-        return jsonify({"success": True})
+            return jsonify({"success": True})
+        if request.method == "GET":
+            logger.info(f"Returning Prediction #{prediction.id}")
+            return jsonify(prediction.json())
     except Exception as e:
+        logger.error(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 
+# Case Classification Request Status ------------------------------
 @api.get("/<case_id>/requests/<request_id>/status")
 @login_required
 def get_classification_status(case_id, request_id):
+    logger.info(f"Checking status of Classification Request #{request_id}")
     classifcation_manager = ClassificationManager()
     status = classifcation_manager.get_request_status(request_id)
     logger.info(f"Status is {status['status']}")
     if not status:
         return jsonify({"error": "Request not found"}), 404
     return jsonify(status)
+
+
+# Syndromes ----------------------------------------
+@api.get("/syndrome/<syndrome_code>")
+@login_required
+def get_syndrome(syndrome_code):
+    try:
+        logger.info(f"Attempting to get Syndrome with code: {syndrome_code}")
+        syndrome = Syndrome.query.filter(Syndrome.code == syndrome_code).one()
+        return jsonify(syndrome.json())
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500

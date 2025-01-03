@@ -609,7 +609,10 @@ class CaseAnalysisManager {
           flashMessage("Classification completed", "success");
           return true;
         } else if (data.status === "failed") {
-          flashMessage(`Classification failed: ${data.error_message}`, "error");
+          flashMessage(
+            `Classification failed: ${data.error_message}`,
+            "danger"
+          );
           return true;
         }
 
@@ -686,7 +689,7 @@ class CaseAnalysisManager {
             
             <div class="card-body p-3">
                 <div class="d-flex align-items-start">
-                    <img src="${prediction.composite_image}" 
+                    <img src="/static/${prediction.composite_image}" 
                          class="syndrome-image rounded-circle" 
                          alt="${prediction.syndrome_name}">
                     
@@ -747,6 +750,7 @@ class CaseAnalysisManager {
     // Add details button handler (currently does nothing)
     card.querySelector(".view-details").addEventListener("click", () => {
       console.log("View details clicked for prediction:", prediction.id);
+      window.predictionDetailsManager.showDetails(prediction.id);
     });
 
     return card;
@@ -805,15 +809,189 @@ class CaseAnalysisManager {
   }
 }
 
-// Initialize the photo manager when the document is ready
-document.addEventListener("DOMContentLoaded", () => {
-  const photoManager = new PhotoManager();
-});
+class PredictionDetailsManager {
+  constructor() {
+    this.currentPrediction = null;
+    this.modal = $("#predictionDetailsModal");
+    this.initializeElements();
+    this.attachEventListeners();
+  }
 
+  initializeElements() {
+    // Modal elements
+    this.syndromeName = this.modal.find("#predictionSyndromeName");
+    this.casePhoto = this.modal.find("#casePhoto");
+    this.compositePhoto = this.modal.find("#compositePhoto");
+    this.confidenceLevel = this.modal.find("#confidenceLevel");
+    this.syndromeDescription = this.modal.find(".syndrome-description");
+    this.featuresList = this.modal.find(".features-list");
+    this.genesList = this.modal.find(".genes-list");
+
+    // Diagnosis checkboxes
+    this.diagnosisCheckboxes = this.modal.find(".diagnosis-checkbox");
+  }
+
+  attachEventListeners() {
+    // Handle diagnosis checkbox changes
+    this.diagnosisCheckboxes.on("change", (e) => {
+      this.updateDiagnosis(e.target.dataset.type, e.target.checked);
+    });
+
+    // Handle feature/gene search
+    this.modal.find('input[type="text"]').on("input", (e) => {
+      const type = e.target.closest(".tab-pane").id;
+      this.filterItems(type, e.target.value);
+    });
+  }
+
+  async showDetails(predictionId) {
+    try {
+      const response = await fetch(
+        `/api/cases/${window.caseId}/predictions/${predictionId}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch prediction details");
+
+      const data = await response.json();
+      this.currentPrediction = data;
+
+      this.updateModalContent(data);
+      this.modal.modal("show");
+    } catch (error) {
+      console.error("Error loading prediction details:", error);
+      flashMessage("Error loading prediction details", "danger");
+    }
+  }
+
+  async updateModalContent(prediction) {
+    // Update basic info
+    this.syndromeName.text(prediction.syndrome_name);
+    this.compositePhoto.attr("src", `/static/${prediction.composite_image}`);
+    this.casePhoto.attr("src", `/api/images/${prediction.case_photo_id}`);
+
+    // Update confidence meter
+    this.confidenceLevel
+      .removeClass("high med low")
+      .addClass(prediction.status)
+      .css("height", `${prediction.confidence_score * 100}%`);
+
+    // Update diagnosis checkboxes
+    this.diagnosisCheckboxes.each((_, checkbox) => {
+      const type = checkbox.dataset.type;
+      checkbox.checked = prediction.diagnosis_status[`${type}_diagnosed`];
+    });
+
+    // Load syndrome info
+    await this.loadSyndromeInfo(prediction.syndrome_code);
+  }
+
+  async loadSyndromeInfo(syndromeCode) {
+    try {
+      const response = await fetch(`/api/cases/syndrome/${syndromeCode}`);
+      if (!response.ok) throw new Error("Failed to fetch syndrome info");
+
+      const data = await response.json();
+
+      // Update description
+      this.syndromeDescription.html(data.abstract);
+
+      // Update features list
+      this.featuresList.empty();
+      data.features.forEach((feature) => {
+        this.featuresList.append(`
+                    <div class="feature-item">
+                        <span>${feature}</span>
+                        <i class="mu mu-info info-icon ml-auto" 
+                           onclick="window.open('https://omim.org/entry/${feature}', '_blank')">
+                        </i>
+                    </div>
+                `);
+      });
+
+      // Update genes list
+      this.genesList.empty();
+      data.genes.forEach((gene) => {
+        this.genesList.append(`
+                    <div class="gene-item">
+                        <span>${gene}</span>
+                        <i class="mu mu-info info-icon ml-auto" 
+                           onclick="window.open('https://omim.org/entry/${gene}', '_blank')">
+                        </i>
+                    </div>
+                `);
+      });
+    } catch (error) {
+      console.error("Error loading syndrome info:", error);
+      flashMessage("Error loading syndrome info", "danger");
+      this.syndromeDescription.html("Failed to load syndrome information");
+    }
+  }
+
+  async updateDiagnosis(type, value) {
+    if (!this.currentPrediction) return;
+
+    try {
+      const response = await fetch(
+        `/api/predictions/${this.currentPrediction.id}/diagnosis`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: type,
+            value: value,
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to update diagnosis");
+
+      // Update the current prediction object
+      this.currentPrediction.diagnosis_status[`${type}_diagnosed`] = value;
+
+      // Trigger event for parent components to update
+      document.dispatchEvent(
+        new CustomEvent("predictionDiagnosisUpdated", {
+          detail: {
+            predictionId: this.currentPrediction.id,
+            diagnosisType: type,
+            value: value,
+          },
+        })
+      );
+    } catch (error) {
+      console.error("Error updating diagnosis:", error);
+      flashMessage("Error updating diagnosis", "danger");
+      // Revert checkbox state
+      this.diagnosisCheckboxes
+        .filter(`[data-type="${type}"]`)
+        .prop("checked", !value);
+    }
+  }
+
+  filterItems(type, searchTerm) {
+    const container =
+      type === "typicalFeatures" ? this.featuresList : this.genesList;
+    const items = container.find(
+      type === "typicalFeatures" ? ".feature-item" : ".gene-item"
+    );
+
+    searchTerm = searchTerm.toLowerCase();
+    items.each((_, item) => {
+      const text = $(item).find("span").text().toLowerCase();
+      $(item).toggle(text.includes(searchTerm));
+    });
+  }
+}
+
+// Initialize classes when the document is ready
 document.addEventListener("DOMContentLoaded", function () {
   const caseId = document.getElementById("case-title").dataset.caseId;
-  const notesManager = new NotesManager(caseId);
-  const analysisManager = new CaseAnalysisManager(caseId);
+  window.caseId = caseId;
+  window.photoManager = new PhotoManager();
+  window.notesManager = new NotesManager(caseId);
+  window.analysisManager = new CaseAnalysisManager(caseId);
+  window.predictionDetailsManager = new PredictionDetailsManager();
 
   // Handle Case Notes button click
   document.querySelector("#caseNotesBtn").addEventListener("click", () => {

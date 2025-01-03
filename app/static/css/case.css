@@ -424,3 +424,42 @@
     font-size: 0.8rem;
   }
 }
+
+.diagnosis-options {
+  border-left: 1px solid #dee2e6;
+  padding-left: 1.5rem;
+}
+
+.diagnosis-item label {
+  cursor: pointer;
+  margin: 0;
+}
+
+.features-list,
+.genes-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.feature-item,
+.gene-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.feature-item:last-child,
+.gene-item:last-child {
+  border-bottom: none;
+}
+
+.info-icon {
+  color: #6c757d;
+  cursor: pointer;
+  margin-left: 0.5rem;
+}
+
+.info-icon:hover {
+  color: #0056b3;
+}

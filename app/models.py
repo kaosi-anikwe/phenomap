@@ -1,5 +1,6 @@
 # python imports
 import time
+import json
 import uuid
 from enum import Enum
 from datetime import datetime
@@ -154,6 +155,9 @@ class Case(db.Model, TimestampMixin, DatabaseHelperMixin):
     def date_of_birth(self):
         return self.dob.strftime("%d %b %Y") if self.dob else None
 
+    def image_id(self):
+        return next((img.id for img in self.patient_images if img.is_default), None)
+
     def check_classification_prerequisites(self):
         result = Case.query.filter(Case.id == self.id).one()
         return {
@@ -215,12 +219,31 @@ class Prediction(db.Model, TimestampMixin, DatabaseHelperMixin):
     composite_image = db.Column(db.Text)
     is_removed = db.Column(db.Boolean, default=False)
     case_id = db.Column(db.Integer, db.ForeignKey("case.id"))
+    syndrome_id = db.Column(db.Integer, db.ForeignKey("syndrome.id"))
     diagnosis = db.relationship(
         "CasePredictionDiagnosis", backref="case", cascade="delete", uselist=False
     )
 
     def __repr__(self):
         return f"<Prediction {self.id} - Case {self.case_id}>"
+
+    def json(self):
+        return {
+            "syndrome_name": self.syndrome_name,
+            "syndrome_code": self.syndrome_code,
+            "composite_image": self.composite_image,
+            "case_photo_id": self.case.image_id(),
+            "status": self.status,
+            "confidence_score": self.confidence_score,
+            "diagnosis_status": {
+                "differential_diagnosed": self.diagnosis.differential,
+                "molecularly_diagnosed": self.diagnosis.molecularly_diagnosed,
+                "clinically_diagnosed": self.diagnosis.clinically_diagnosed,
+            },
+        }
+
+    def syndrome(self):
+        return Syndrome.query.get(self.syndrome_id)
 
 
 class CasePredictionDiagnosis(db.Model, TimestampMixin, DatabaseHelperMixin):
@@ -277,3 +300,82 @@ class PatientImage(db.Model, TimestampMixin, DatabaseHelperMixin):
         self.filename = filename
         self.encryption_key = encryption_key
         self.content_hash = content_hash
+
+
+class Syndrome(db.Model, TimestampMixin, DatabaseHelperMixin):
+    __tablename__ = "syndrome"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(256), nullable=False)
+    code = db.Column(db.String(10), nullable=False)
+    composite_image = db.Column(db.String(256), default="img/down.png")
+    synonyms = db.Column(db.Text)
+    omim = db.Column(db.String(20))
+    genes = db.Column(db.String(1024))
+    location = db.Column(db.String(50))
+    images = db.Column(db.Text)
+    inheritance_modes = db.Column(db.String(1024))
+    abstract = db.Column(db.Text)
+    features = db.Column(db.Text)
+    resources = db.Column(db.Text)
+
+    def __init__(
+        self,
+        title,
+        code,
+        synonyms,
+        omim,
+        genes,
+        location,
+        images,
+        inheritance_modes,
+        abstract,
+        features,
+        resources,
+    ):
+        self.title = title
+        self.code = code
+        self.synonyms = synonyms
+        self.omim = omim
+        self.genes = genes
+        self.location = location
+        self.images = images
+        self.inheritance_modes = inheritance_modes
+        self.abstract = abstract
+        self.features = features
+        self.resources = resources
+
+    def get_synonyms(self):
+        return str(self.synonyms).split(",")
+
+    def get_genes(self):
+        return str(self.genes).split(",")
+
+    def get_inheritance_modes(self):
+        return str(self.inheritance_modes).split(",")
+
+    def get_features(self):
+        return str(self.features).split(",")
+
+    def get_resources(self):
+        return json.loads(self.resources) if self.resources else {}
+
+    def get_images(self):
+        image_records = json.loads(self.images) if self.images else []
+        images = [img["path"] for img in image_records if img.get("path")]
+        return images or ["img/down.png"]
+
+    def json(self):
+        return {
+            "title": self.title,
+            "synonyms": self.get_synonyms(),
+            "composite_image": self.composite_image or "/img/down.png",
+            "omim": self.omim,
+            "genes": self.get_genes(),
+            "location": self.location,
+            "images": self.get_images(),
+            "inheritance_modes": self.get_inheritance_modes(),
+            "abstract": self.abstract,
+            "features": self.get_features(),
+            "resources": self.get_resources(),
+        }
