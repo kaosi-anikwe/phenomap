@@ -181,3 +181,6 @@ uploads/
 
 # logs
 logs/
+
+# Syndrome Images
+app/static/img/syndromes/

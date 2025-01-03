@@ -369,7 +369,7 @@ class Syndrome(db.Model, TimestampMixin, DatabaseHelperMixin):
         return {
             "title": self.title,
             "synonyms": self.get_synonyms(),
-            "composite_image": self.composite_image or "/img/down.png",
+            "composite_image": self.composite_image or "img/down.png",
             "omim": self.omim,
             "genes": self.get_genes(),
             "location": self.location,
