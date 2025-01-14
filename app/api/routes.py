@@ -23,6 +23,7 @@ from ..models import (
 
 
 api = Blueprint("api", __name__)
+classification_manager = ClassificationManager()
 
 
 # Get Cases -----------------------------
@@ -195,7 +196,6 @@ def check_prerequisites(case_id):
 @login_required
 def perform_classification(case_id):
     """Perform syndrome classification for a case."""
-    classification_manager = ClassificationManager()
     try:
         logger.info(f"Received ClassificationRequest for Case #{case_id}")
         force = request.json.get("force", False)

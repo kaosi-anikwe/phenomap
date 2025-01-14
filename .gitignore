@@ -184,3 +184,6 @@ logs/
 
 # Syndrome Images
 app/static/img/syndromes/
+
+# Model Directory
+model/

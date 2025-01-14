@@ -84,7 +84,9 @@ def process_directories(base_dir):
                     logger.info(f"Copied: {filename} to {new_path}")
                     if "photo_1_" in filename:
                         composite = str(new_path).replace(f"{app.static_folder}/", "")
-                    images.append({"path": str(new_path).replace(f"{app.static_folder}/", "")})
+                    images.append(
+                        {"path": str(new_path).replace(f"{app.static_folder}/", "")}
+                    )
             # Update images
             syndrome.composite_image = composite
             syndrome.images = json.dumps(images)

@@ -1,13 +1,18 @@
 # python imports
+import os
 import time
+import json
 import random
+import traceback
 from datetime import datetime
 from typing import Optional, Dict
 
 # installed imports
+import cv2
 import numpy as np
 from PIL import Image
 import tensorflow as tf
+from tensorflow.keras import layers, models, backend as K
 
 # local imports
 from .. import logger, create_app
@@ -22,78 +27,170 @@ from ..models import (
 )
 
 
-class GeneticDisorderClassifier:
-    def __init__(self, model_path="path/to/your/model"):
-        # Load model
-        # self.model = self.load_model(model_path)
-        pass
+class PhenoNetPredictor:
+    """A class for making predictions with a trained PhenoNet model.
 
-    def load_model(self, model_path):
-        """Load the trained model."""
+    This class handles all the preprocessing and prediction logic needed to use
+    PhenoNet in a production environment. It maintains consistent preprocessing
+    with the training pipeline while providing a simple interface for predictions.
+    """
+
+    def __init__(
+        self,
+        model_path="model/phenonet_model_20250104_155140.h5",
+        syndrome_mapping_path="model/syndrome_map.json",
+    ):
+        """Initialize the predictor with a trained model and syndrome mappings.
+
+        Args:
+            model_path: Path to the saved .keras or .h5 model file
+            syndrome_mapping_path: Path to the JSON file containing syndrome mappings
+        """
+        # Load the trained model
+        # self.model = tf.keras.models.load_model(
+        #     model_path,
+        #     custom_objects={'loss_function': self._dummy_loss},  # Handle custom loss,
+        #     safe_mode=False,
+        # )
+        self.model = load_checkpoint_model(model_path, 602)
+        print("Model loaded successfully and ready for predictions")
+
+        # Load syndrome mappings
+        with open(syndrome_mapping_path, "r") as f:
+            self.syndrome_mapping = json.load(f)
+
+        # Reverse the mapping for predictions
+        self.index_to_syndrome = {v: k for k, v in self.syndrome_mapping.items()}
+
+        # Store model parameters
+        self.img_size = 100  # Same as training
+
+    def _dummy_loss(self, y_true, y_pred):
+        """Dummy loss function for model loading - not used for predictions."""
+        return 0
+
+    def preprocess_image(self, image_data):
+        """Preprocess an image from bytes data for syndrome prediction.
+
+        This method handles image preprocessing for both file uploads and memory streams,
+        applying the same preprocessing steps used during model training to ensure
+        consistent predictions.
+
+        Args:
+            image_data: BytesIO object containing the image data
+                This could come from a web upload, API request, or other stream
+
+        Returns:
+            numpy.ndarray: Preprocessed image array ready for model input,
+                with shape (1, img_size, img_size, 1) and values normalized to [0,1]
+
+        Raises:
+            ValueError: If the image data cannot be properly decoded or processed
+        """
         try:
-            # Replace with your actual model loading code
-            logger.info(f"Loading model from path: {model_path}")
-            model = tf.keras.models.load_model(model_path)
-            return model
+            # Convert BytesIO data to numpy array
+            nparr = np.frombuffer(image_data.getvalue(), np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if img is None:
+                raise ValueError("Could not decode image data")
+
+            # Convert to grayscale - crucial for syndrome analysis
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Apply preprocessing steps to enhance facial features
+            img = cv2.equalizeHist(img)  # Enhance contrast for better feature detection
+            img = cv2.GaussianBlur(
+                img, (3, 3), 0
+            )  # Reduce noise while preserving edges
+
+            # Resize to model's expected input size
+            img = cv2.resize(img, (self.img_size, self.img_size))
+
+            # Normalize pixel values to [0,1] range
+            img = img.astype("float32") / 255.0
+
+            # Add batch and channel dimensions for model input
+            img = np.expand_dims(img, axis=(0, -1))
+
+            return img
+
         except Exception as e:
-            logger.error(f"Error loading model: {e}")
-            return None
+            # Provide detailed error information for debugging
+            raise ValueError(f"Error preprocessing image: {str(e)}")
 
-    def preprocess_image(self, image):
-        """Preprocess image for model input."""
-        try:
-            logger.info("Preprocessing image...")
-            image = Image.open(image)
-            # TODO: Add your image preprocessing steps here
-            # For example:
-            image = image.resize((224, 224))  # Resize to model input size
-            image_array = np.array(image)
-            # TODO: Add any normalization or other preprocessing steps
-            return image_array
-        except Exception as e:
-            logger.error(f"Error preprocessing image: {e}")
-            return None
+    def classify(self, case: Case, top_k=15):
+        """Make a prediction for a single image.
 
-    def classify(self, case: Case, fake=True):
-        """Perform classification for a case."""
+        Args:
+            image_path: Path to the image file
+            gender: 'M' or 'F'
+            ethnicity: One of ['caucasian', 'african', 'asian', 'hispanic', 'indian']
+            top_k: Number of top predictions to return
+
+        Returns:
+            List of (syndrome, confidence) tuples for top k predictions
+        """
         try:
-            logger.info("Classifying image...")
-            predictions = []
+            logger.info("Classifying case...")
+            # Perform classification for each image
+            model_predictions = []
             for idx, img in enumerate(case.patient_images):
                 logger.info(f"Predicting image {idx}")
-                if not fake:
-                    # Preprocess image
-                    handler = SecureImageHandler(img.encryption_key)
-                    processed_image = self.preprocess_image(
-                        handler.retrieve_image(img.id, case.user_id)
-                    )
 
-                    if processed_image is None:
+                # Preprocess image
+                handler = SecureImageHandler(img.encryption_key)
+                img_data = handler.retrieve_image(img.id, case.user_id)
+                img = self.preprocess_image(img_data)
+
+                # Prepare metadata features
+                gender_feature = 1 if case.gender[:1].upper() == "M" else 0
+                ethnicity_map = {
+                    "caucasian": 0,
+                    "african": 1,
+                    "asian": 2,
+                    "hispanic": 3,
+                    "indian": 4,
+                    "arab": 5,
+                }
+                ethnicity_feature = ethnicity_map[case.ethnicity.lower()]
+
+                # Create metadata input
+                metadata = np.array([[gender_feature, ethnicity_feature]])
+
+                # Make prediction
+                predictions = self.model.predict([img, metadata], verbose=0)
+
+                # Get top k predictions
+                top_indices = np.argsort(predictions[0])[-top_k:][::-1]
+
+                logger.info(f"PREDICTIONS: {top_indices}")
+
+                # Format results
+                results = []
+                for idx in top_indices:
+                    try:
+                        syndrome = self.index_to_syndrome[idx]
+                    except KeyError:
+                        logger.info(f"Skipping unknown syndrome: {idx}")
                         continue
+                    confidence = float(predictions[0][idx])
+                    logger.info(f"OUTPUT: {(syndrome, confidence)}")
+                    results.append({"code": syndrome, "score": confidence * 10})
 
-                    # Get model predictions
-                    model_output = self.model.predict(
-                        np.expand_dims(processed_image, axis=0)
-                    )
-                else:
-                    model_output = generate_mock_predictions()
-
-                predictions.extend(model_output)
-
-                logger.info(f"Got {len(predictions)} predictions")
-
+                logger.info(f"Got {len(results)} predictions")
+                model_predictions.extend(results)
             logger.info(f"Done predicting {len(case.patient_images)} images")
             # Process model outputs
-            syndrome_predictions = self.process_model_output(
-                self.remove_duplicates(predictions)
+            final_predictions = self.process_model_output(
+                self.remove_duplicates(model_predictions)
             )
-            logger.info(f"Total: {len(syndrome_predictions)} predictions")
-
-            return syndrome_predictions
-
+            logger.info(f"Total: {len(final_predictions)} predictions")
+            return final_predictions
         except Exception as e:
             logger.error(f"Classification error: {e}")
-            return None
+            logger.error(traceback.format_exc())
+            return []
 
     def process_model_output(self, model_output):
         """Process raw model output into syndrome predictions."""
@@ -156,7 +253,7 @@ class ClassificationManager:
     def __init__(self):
         self.active_requests = {}  # Store in-progress requests
         self.request_timeout = 300  # 5 minutes timeout
-        self.classifier = GeneticDisorderClassifier()
+        self.classifier = PhenoNetPredictor()
 
     def create_request(self, case_id: str, force: bool = False) -> dict:
         """Create a new classification request."""
@@ -313,3 +410,185 @@ def generate_mock_predictions():
     return [
         {"code": synd.code, "score": scores[idx]} for idx, synd in enumerate(syndromes)
     ]
+
+
+def focal_loss(gamma=2.0, alpha=0.25):
+    """Custom focal loss function that properly handles tensor shapes.
+
+    This implementation uses reduction operations correctly and ensures
+    tensor compatibility throughout the calculation.
+
+    Args:
+        gamma (float): Focusing parameter for harder examples
+        alpha (float): Weight factor for class imbalance
+
+    Returns:
+        function: Loss function that can be used by Keras
+    """
+
+    def loss_function(y_true, y_pred):
+        # Add small epsilon to prevent log(0)
+        epsilon = tf.keras.backend.epsilon()
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1.0 - epsilon)
+
+        # Convert logits to probabilities if needed
+        if not isinstance(y_pred, tf.Tensor):
+            y_pred = tf.convert_to_tensor(y_pred)
+        if not isinstance(y_true, tf.Tensor):
+            y_true = tf.convert_to_tensor(y_true)
+
+        # Ensure both tensors are float32
+        y_pred = tf.cast(y_pred, tf.float32)
+        y_true = tf.cast(y_true, tf.float32)
+
+        # Calculate cross entropy
+        ce = -y_true * tf.math.log(y_pred)
+
+        # Calculate focal weight
+        focal_weight = tf.pow(1 - y_pred, gamma)
+
+        # Combine all factors
+        focal_loss = alpha * focal_weight * ce
+
+        # Reduce mean across all dimensions
+        return tf.reduce_mean(tf.reduce_sum(focal_loss, axis=-1))
+
+    return loss_function
+
+
+def combined_loss(alpha=0.1):
+    """Enhanced loss function combining focal loss with label smoothing."""
+    focal = focal_loss(gamma=2.0)
+
+    def loss_function(y_true, y_pred):
+        # Label smoothing
+        eps = 0.1
+        y_true_smooth = y_true * (1 - eps) + eps / y_true.shape[-1]
+
+        # Combine losses
+        focal_term = focal(y_true, y_pred)
+        ce_term = tf.keras.losses.categorical_crossentropy(y_true_smooth, y_pred)
+        return focal_term + alpha * ce_term
+
+    return loss_function
+
+
+def load_checkpoint_model(checkpoint_path, num_classes=602):
+    """Load a model from a checkpoint file (.h5 format).
+
+    This function handles loading a model from weights by:
+    1. Recreating the original model architecture
+    2. Loading the saved weights into this architecture
+    3. Setting up the model for inference
+
+    Args:
+        checkpoint_path: Path to the .h5 checkpoint file
+        num_classes: Number of classes the model was trained on
+
+    Returns:
+        A compiled Keras model ready for making predictions
+    """
+    # First, recreate the original model architecture
+    model = build_model(num_classes=num_classes)
+
+    # Load the weights from the checkpoint
+    try:
+        # Try loading just the weights
+        model.load_weights(checkpoint_path)
+        print(f"Successfully loaded weights from {checkpoint_path}")
+    except Exception as e:
+        print(f"Error loading weights: {str(e)}")
+        raise
+
+    # Compile the model for inference
+
+    model.compile(
+        optimizer="adam",  # The optimizer doesn't matter for inference
+        loss=combined_loss(alpha=0.1),
+        metrics=["accuracy"],
+    )
+
+    return model
+
+
+def create_pyramid_features(x, filters):
+    """Create feature pyramid for multi-scale feature extraction."""
+    features = []
+    for f in filters:
+        x = layers.Conv2D(f, (3, 3), padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.LeakyReLU(alpha=0.1)(x)
+        features.append(x)
+        x = layers.MaxPooling2D((2, 2))(x)
+    return features
+
+
+def attention_module(x):
+    """Enhanced attention module with both spatial and channel attention."""
+    # Channel attention with SE-style squeeze-excitation
+    se = layers.GlobalAveragePooling2D()(x)
+    se = layers.Dense(x.shape[-1] // 4, activation="relu")(se)
+    se = layers.Dense(x.shape[-1], activation="sigmoid")(se)
+    se = layers.Reshape((1, 1, x.shape[-1]))(se)
+    x = layers.Multiply()([x, se])
+
+    # Spatial attention
+    avg_pool = layers.Lambda(lambda x: K.mean(x, axis=3, keepdims=True))(x)
+    max_pool = layers.Lambda(lambda x: K.max(x, axis=3, keepdims=True))(x)
+    concat = layers.Concatenate(axis=3)([avg_pool, max_pool])
+    spatial = layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid")(concat)
+
+    return layers.Multiply()([x, spatial])
+
+
+def build_model(num_classes, img_size=100):
+    """Build enhanced PhenoNet model with pyramid features and improved attention."""
+    # Input layers
+    img_input = layers.Input(shape=(img_size, img_size, 1))
+
+    # Initial feature extraction
+    x = layers.Conv2D(64, (7, 7), strides=(2, 2), padding="same")(img_input)
+    x = layers.BatchNormalization()(x)
+    x = layers.LeakyReLU(alpha=0.1)(x)
+    x = layers.MaxPooling2D((3, 3), strides=(2, 2), padding="same")(x)
+
+    # Feature pyramid
+    pyramid_features = create_pyramid_features(x, [64, 128, 256])
+
+    # Global context
+    context = layers.GlobalAveragePooling2D()(pyramid_features[-1])
+    context = layers.Dense(256)(context)
+    context = layers.BatchNormalization()(context)
+    context = layers.LeakyReLU(alpha=0.1)(context)
+
+    # Attention on final pyramid feature
+    attended = attention_module(pyramid_features[-1])
+
+    # Global features
+    x = layers.GlobalAveragePooling2D()(attended)
+    x = layers.Concatenate()([x, context])
+
+    # Additional features input
+    additional_input = layers.Input(shape=(2,))
+    y = layers.Dense(32)(additional_input)
+    y = layers.BatchNormalization()(y)
+    y = layers.LeakyReLU(alpha=0.1)(y)
+    y = layers.Dropout(0.2)(y)
+
+    # Combine features
+    combined = layers.Concatenate()([x, y])
+
+    # Classification head
+    combined = layers.Dense(512)(combined)
+    combined = layers.BatchNormalization()(combined)
+    combined = layers.LeakyReLU(alpha=0.1)(combined)
+    combined = layers.Dropout(0.3)(combined)
+
+    combined = layers.Dense(256)(combined)
+    combined = layers.BatchNormalization()(combined)
+    combined = layers.LeakyReLU(alpha=0.1)(combined)
+    combined = layers.Dropout(0.3)(combined)
+
+    output = layers.Dense(num_classes, activation="softmax")(combined)
+
+    return models.Model(inputs=[img_input, additional_input], outputs=output)
