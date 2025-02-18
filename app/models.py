@@ -312,7 +312,7 @@ class Syndrome(db.Model, TimestampMixin, DatabaseHelperMixin):
     synonyms = db.Column(db.Text)
     omim = db.Column(db.String(20))
     genes = db.Column(db.String(1024))
-    location = db.Column(db.String(50))
+    location = db.Column(db.String(500))
     images = db.Column(db.Text)
     inheritance_modes = db.Column(db.String(1024))
     abstract = db.Column(db.Text)

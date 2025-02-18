@@ -147,6 +147,7 @@ class PhotoManager {
     });
 
     if (!response.ok) {
+      console.error(await response.text())
       throw new Error("Upload failed");
     }
 

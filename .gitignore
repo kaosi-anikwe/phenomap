@@ -186,4 +186,7 @@ logs/
 app/static/img/syndromes/
 
 # Model Directory
-model/
+models/
+models_*/
+
+preprocessed/

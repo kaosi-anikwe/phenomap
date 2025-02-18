@@ -100,49 +100,34 @@ app = create_app()
 
 with app.app_context():
     try:
-        process_directories("preprocessed")
-        # # Delete all exting syndromes
-        # logger.info(f"Deleted: {Syndrome.query.delete()} syndromes")
+        # process_directories("preprocessed")
+        # Delete all exting syndromes
+        logger.info(f"Deleted: {Syndrome.query.delete()} syndromes")
 
-        # # Set to store used codes
-        # existing_codes = set()
+        # Set to store used codes
+        existing_codes = set()
 
-        # # First pass: Generate codes for all records
-        # with open("syndromes.json") as file:
-        #     data = json.load(file)
+        # First pass: Generate codes for all records
+        with open("syndromes.json") as file:
+            data = json.load(file)
 
-        #     # Add codes to each record
-        #     for record in data:
-        #         code = generate_syndrome_code(
-        #             record["title"],
-        #             record.get("category", record["title"][0]),
-        #             existing_codes,
-        #         )
-        #         record["code"] = code
-        #         existing_codes.add(code)
-        #         logger.info(f"Generated code {code} for {record['title']}")
-
-        # # Second pass: Save to database with generated codes
-        # for record in data:
-        #     syndrome = Syndrome(
-        #         title=record["title"],
-        #         code=record["code"],  # Now we have the code
-        #         synonyms="".join(record["synonyms"]),
-        #         omim=record["omim"],
-        #         genes=",".join(record["genes"]),
-        #         location=record["location"],
-        #         images=json.dumps([]),
-        #         inheritance_modes=",".join(record["inheritance_modes"]),
-        #         abstract=record["abstract"],
-        #         features=",".join(record["features"]),
-        #         resources=json.dumps(record["resources"]),
-        #     )
-        #     syndrome.insert()
-        #     logger.info(f"Entered Syndrome #{syndrome.id} with code {syndrome.code}")
-
-        # # Optionally save the updated JSON with codes
-        # with open("syndromes_with_codes.json", "w") as f:
-        #     json.dump(data, f, indent=2)
+        # Second pass: Save to database with generated codes
+        for record in data:
+            syndrome = Syndrome(
+                title=record["title"],
+                code=record["code"],
+                synonyms="".join(record["synonyms"]),
+                omim=record["omim"],
+                genes=",".join(record["genes"]),
+                location=record["location"],
+                images=json.dumps([]),
+                inheritance_modes=",".join(record["inheritance_modes"]),
+                abstract=record["abstract"],
+                features=",".join(record["features"]),
+                resources=json.dumps(record["resources"]),
+            )
+            syndrome.insert()
+            logger.info(f"Entered Syndrome #{syndrome.id} with code {syndrome.code}")
 
     except:
         logger.error(traceback.format_exc())
